@@ -4,6 +4,7 @@
 /src.old/
 /tests.old/
 /__cmake_systeminformation/
+/.ropeproject/
 
 # Files
 .DS_Store

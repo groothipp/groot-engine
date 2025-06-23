@@ -99,26 +99,60 @@ Allocator::SemaphoreOutput Allocator::semaphores(const Engine& engine, unsigned 
   return std::move(semaphores);
 }
 
-Allocator::DescriptorOutput Allocator::descriptorPool(const Engine& engine, const vk::raii::DescriptorSetLayout& setLayout) {
-  vk::DescriptorPoolSize storagePool{
-    .type             = vk::DescriptorType::eStorageBuffer,
-    .descriptorCount  = engine.m_settings.buffer_mode
-  };
+Allocator::DescriptorOutput Allocator::descriptorPool(
+  const Engine& engine, const std::vector<vk::raii::DescriptorSetLayout>& setLayouts,
+  unsigned int storageCount,
+  unsigned int uniformCount,
+  unsigned int imageCount,
+  unsigned int samplerCount
+) {
+  std::vector<vk::DescriptorPoolSize> poolSizes;
+
+  if (storageCount > 0) {
+    poolSizes.emplace_back(vk::DescriptorPoolSize{
+      .type             = vk::DescriptorType::eStorageBuffer,
+      .descriptorCount  = storageCount
+    });
+  }
+
+  if (uniformCount > 0) {
+    poolSizes.emplace_back(vk::DescriptorPoolSize{
+      .type             = vk::DescriptorType::eUniformBuffer,
+      .descriptorCount  = uniformCount
+    });
+  }
+
+  if (imageCount > 0) {
+    poolSizes.emplace_back(vk::DescriptorPoolSize{
+      .type             = vk::DescriptorType::eStorageImage,
+      .descriptorCount  = imageCount
+    });
+    samplerCount += imageCount;
+  }
+
+  if (samplerCount > 0) {
+    poolSizes.emplace_back(vk::DescriptorPoolSize{
+      .type             = vk::DescriptorType::eSampledImage,
+      .descriptorCount  = samplerCount
+    });
+  }
 
   vk::raii::DescriptorPool pool = engine.m_context.device().createDescriptorPool(vk::DescriptorPoolCreateInfo{
     .flags          = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet,
-    .maxSets        = engine.m_settings.buffer_mode,
-    .poolSizeCount  = 1,
-    .pPoolSizes     = &storagePool
+    .maxSets        = static_cast<unsigned int>(engine.m_settings.buffer_mode * setLayouts.size()),
+    .poolSizeCount  = static_cast<unsigned int>(poolSizes.size()),
+    .pPoolSizes     = poolSizes.data()
   });
 
   std::vector<vk::DescriptorSetLayout> layouts;
-  for (unsigned int i = 0; i < engine.m_settings.buffer_mode; ++i)
-    layouts.emplace_back(*setLayout);
+  for (unsigned int i = 0; i < engine.m_settings.buffer_mode; ++i) {
+    for (const auto& layout : setLayouts)
+      layouts.emplace_back(*layout);
+  }
 
   vk::raii::DescriptorSets sets(engine.m_context.device(), vk::DescriptorSetAllocateInfo{
     .descriptorPool     = pool,
-    .descriptorSetCount = engine.m_settings.buffer_mode,
+    .descriptorSetCount = static_cast<unsigned int>(engine.m_settings.buffer_mode * setLayouts.size()),
     .pSetLayouts        = layouts.data()
   });
 

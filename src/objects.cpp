@@ -13,7 +13,6 @@ const ObjectManager::Output ObjectManager::operator[](std::string material) cons
     m_indexBuffers[obj.bufferIndex],
     m_indirectBuffers[obj.bufferIndex],
     obj.commands.size(),
-    obj.transformIndex
   };
 }
 
@@ -25,8 +24,13 @@ unsigned int ObjectManager::commandSize() const {
   return sizeof(IndirectCommand);
 }
 
-const std::vector<mat4>& ObjectManager::transforms() const {
-  return m_transforms;
+const std::map<std::string, std::vector<mat4>> ObjectManager::transforms() const {
+  std::map<std::string, std::vector<mat4>> matrices;
+
+  for (auto& [material, data] : m_objects)
+    matrices.emplace(material, data.matrices);
+
+  return matrices;
 }
 
 transform ObjectManager::add(const std::string& material, const std::string& path, const Transform& transform) {
@@ -43,37 +47,25 @@ transform ObjectManager::add(const std::string& material, const std::string& pat
   obj.vertices.insert(obj.vertices.end(), vertices.begin(), vertices.end());
   obj.indices.insert(obj.indices.end(), indices.begin(), indices.end());
   obj.transforms.emplace_back(std::make_shared<Transform>(transform));
+  obj.matrices.emplace_back(transform.matrix());
 
   obj.transforms.back()->m_manager = this;
+  obj.transforms.back()->m_location = { material, obj.transforms.size() - 1 };
   return obj.transforms.back();
 }
 
-void ObjectManager::loadTransforms() {
-  unsigned int transformIndex = 0;
-  for (auto& [material, obj] : m_objects) {
-    obj.transformIndex = transformIndex;
-
-    for (const auto& t : obj.transforms) {
-      m_transforms.emplace_back(
-        mat4::translation(t->m_position) *
-        mat4::rotation(t->m_rotation) *
-        mat4::scale(t->m_scale)
-      );
-      t->m_index = transformIndex++;
-    }
-  }
-}
-
-void ObjectManager::batch(unsigned int index, const std::tuple<vec3, vec3, vec3>& vals) {
-  m_updates.insert_or_assign(index, vals);
+void ObjectManager::batch(const std::pair<std::string, unsigned int>& location, const std::tuple<vec3, vec3, vec3>& vals) {
+  m_updates.insert_or_assign(location, vals);
 }
 
 void ObjectManager::updateTransforms() {
-  for (auto& [index, vals] : m_updates) {
+  for (auto& [location, vals] : m_updates) {
     auto [position, rotation, scale] = vals;
-    m_transforms[index] = mat4::translation(position) *
-                          mat4::rotation(rotation) *
-                          mat4::scale(scale);
+    auto [material, index] = location;
+
+    m_objects[material].matrices[index] = mat4::translation(position) *
+                                          mat4::rotation(rotation) *
+                                          mat4::scale(scale);
   }
 }
 

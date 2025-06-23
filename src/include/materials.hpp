@@ -31,9 +31,6 @@ enum ShaderStage {
 struct EngineData {
   mat4 view = mat4::identity();
   mat4 projection = mat4::identity();
-  unsigned int frameIndex;
-  unsigned int materialIndex;
-  unsigned int transformIndex;
 };
 
 class MaterialManager {
@@ -63,16 +60,16 @@ class MaterialManager {
     };
 
   private:
-    struct Material {
-      unsigned int builder = 0;
-      unsigned int pipeline = 0;
-    };
-
     class Iterator {
-      using Output = std::pair<const std::string&, const vk::raii::Pipeline&>;
+      using Output = std::tuple<
+        const std::string&,
+        const vk::raii::Pipeline&,
+        const vk::raii::PipelineLayout&,
+        const vk::raii::DescriptorSet&
+      >;
 
       public:
-        Iterator(const MaterialManager *, const std::map<std::string, Material>::const_iterator&);
+        Iterator(const MaterialManager *, const std::map<std::string, unsigned int>::const_iterator&);
         Iterator(const Iterator&) = default;
         Iterator(Iterator&&) = default;
 
@@ -89,7 +86,7 @@ class MaterialManager {
 
       private:
         const MaterialManager * m_manager;
-        std::map<std::string, Material>::const_iterator m_iterator;
+        std::map<std::string, unsigned int>::const_iterator m_iterator;
     };
 
   public:
@@ -106,28 +103,29 @@ class MaterialManager {
     Iterator end() const;
 
     bool exists(std::string) const;
-    const vk::raii::PipelineLayout& layout() const;
-    const vk::raii::DescriptorSet& descriptorSet(unsigned int) const;
 
     void add(const std::string&, const Builder&);
     void add(const std::string&, Builder&&);
-    void load(const Engine&, const std::vector<mat4>&);
-    void updateTransforms(const unsigned int&, const std::vector<mat4>&);
+    void load(const Engine&, const std::map<std::string, std::vector<mat4>>&);
+    void updateTransforms(const std::map<std::string, std::vector<mat4>>&);
+    void updateFrameIndex(const Engine&);
 
   private:
     ShaderStages getShaderStages(const Engine&, const Builder&) const;
 
-    void createLayout(const Engine&, unsigned int);
+    void createLayout(const Engine&);
     void createPipeline(const Engine&, const Builder&);
-    void createDescriptors(const Engine&, const std::vector<mat4>&);
+    void createDescriptors(const Engine&, const std::map<std::string, std::vector<mat4>>&);
     void updateSets(const Engine&);
+    void updateTransforms(const std::vector<mat4>&, unsigned int);
 
   private:
-    std::map<std::string, Material> m_materials;
+    std::map<std::string, unsigned int> m_materials;
     std::vector<Builder> m_builders;
+    unsigned int m_frameIndex = 0;
 
-    vk::raii::DescriptorSetLayout m_setLayout = nullptr;
-    vk::raii::PipelineLayout m_layout = nullptr;
+    std::vector<vk::raii::DescriptorSetLayout> m_setLayouts;
+    std::vector<vk::raii::PipelineLayout> m_layouts;
     std::vector<vk::raii::Pipeline> m_pipelines;
 
     vk::raii::DescriptorPool m_setPool = nullptr;

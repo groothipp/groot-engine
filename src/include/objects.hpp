@@ -21,8 +21,7 @@ class ObjectManager {
     const vk::raii::Buffer&,
     const vk::raii::Buffer&,
     const vk::raii::Buffer&,
-    const unsigned int,
-    const unsigned int&
+    const unsigned int
   >;
 
   private:
@@ -40,7 +39,7 @@ class ObjectManager {
       unsigned int bufferIndex = 0;
       std::vector<IndirectCommand> commands;
       std::vector<std::shared_ptr<Transform>> transforms;
-      unsigned int transformIndex = 0;
+      std::vector<mat4> matrices;
     };
 
   public:
@@ -57,19 +56,17 @@ class ObjectManager {
 
     bool hasObjects(std::string) const;
     unsigned int commandSize() const;
-    const std::vector<mat4>& transforms() const;
+    const std::map<std::string, std::vector<mat4>> transforms() const;
 
     transform add(const std::string&, const std::string&, const Transform&);
-    void loadTransforms();
     void load(const Engine&);
-    void batch(unsigned int, const std::tuple<vec3, vec3, vec3>&);
+    void batch(const std::pair<std::string, unsigned int>&, const std::tuple<vec3, vec3, vec3>&);
     void updateTransforms();
     void updateTimes(double);
 
   private:
     std::map<std::string, ObjectData> m_objects;
-    std::map<unsigned int, std::tuple<vec3, vec3, vec3>> m_updates;
-    std::vector<mat4> m_transforms;
+    std::map<std::pair<std::string, unsigned int>, std::tuple<vec3, vec3, vec3>> m_updates;
 
     vk::raii::DeviceMemory m_vertexMemory = nullptr;
     std::vector<vk::raii::Buffer> m_vertexBuffers;

@@ -118,8 +118,6 @@ void Engine::createCommandPools() {
 }
 
 void Engine::load() {
-  m_objects.loadTransforms();
-
   std::future materialThread = std::async(std::launch::async,
     [this](){ this->m_materials.load(*this, this->m_objects.transforms()); }
   );
@@ -144,9 +142,11 @@ void Engine::updateTimes() {
 }
 
 void Engine::batchUpdates() {
-  m_objects.updateTransforms();
-  m_materials.updateTransforms(m_renderer.frameIndex(), m_objects.transforms());
+  m_materials.updateFrameIndex(*this);
   m_objects.updateTimes(m_frameTime);
+
+  m_objects.updateTransforms();
+  m_materials.updateTransforms(m_objects.transforms());
 }
 
 } // namespace ge

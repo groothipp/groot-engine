@@ -36,10 +36,6 @@ add_custom_target(shaders ALL DEPENDS ${SPVS})
 add_executable(test ${TESTS_SOURCES})
 add_dependencies(test shaders)
 
-if (${CMAKE_SYSTEM_NAME} STREQUAL "Darwin" AND ${CMAKE_SYSTEM_PROCESSOR} STREQUAL "arm64")
-  set_target_properties(test PROPERTIES LINK_FLAGS "-rpath /usr/local/lib")
-endif()
-
 target_link_libraries(test PRIVATE
   groot
   Catch2::Catch2

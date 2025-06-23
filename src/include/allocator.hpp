@@ -50,7 +50,12 @@ class Allocator {
     static DepthOutput depthResources(const Engine&);
     static FenceOutput fences(const Engine&, unsigned int, bool signaled = false);
     static SemaphoreOutput semaphores(const Engine&, unsigned int);
-    static DescriptorOutput descriptorPool(const Engine&, const vk::raii::DescriptorSetLayout&);
+    static DescriptorOutput descriptorPool(const Engine&, const std::vector<vk::raii::DescriptorSetLayout>&,
+      unsigned int storageCount,
+      unsigned int uniformCount,
+      unsigned int imageCount,
+      unsigned int samplerCount
+    );
 
   private:
     static vk::raii::DeviceMemory allocate(

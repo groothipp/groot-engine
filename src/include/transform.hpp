@@ -2,6 +2,8 @@
 
 #include "src/include/linalg.hpp"
 
+#include <string>
+
 namespace ge {
 
 class ObjectManager;
@@ -25,9 +27,12 @@ class Transform {
     const vec3& rotation() const;
     const vec3& scale() const;
     const double& elapsed_time() const;
+    const mat4 matrix() const;
 
     void translate(const vec3&);
     void rotate(const vec3&);
+    void resize(float);
+    void resize(const vec3&);
     void set_position(const vec3&);
     void set_rotation(const vec3&);
     void set_scale(float);
@@ -40,7 +45,7 @@ class Transform {
     double m_time = 0.0;
 
     ObjectManager * m_manager = nullptr;
-    unsigned int m_index = 0;
+    std::pair<std::string, unsigned int> m_location;
 };
 
 } // namespace ge

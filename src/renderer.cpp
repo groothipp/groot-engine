@@ -262,29 +262,26 @@ void Renderer::draw(const Engine& engine) {
   EngineData engineData{
     .view           = m_view,
     .projection     = m_projection,
-    .frameIndex     = m_frameIndex
   };
 
   unsigned int materialIndex = 0;
-  for (const auto& [material, pipeline] : engine.m_materials) {
-    engineData.materialIndex = materialIndex++;
+  for (const auto& [material, pipeline, layout, descriptorSet] : engine.m_materials) {
     if (!engine.m_objects.hasObjects(material)) continue;
 
     m_renderCmds[m_frameIndex].bindPipeline(vk::PipelineBindPoint::eGraphics, pipeline);
 
     m_renderCmds[m_frameIndex].bindDescriptorSets(
       vk::PipelineBindPoint::eGraphics,
-      engine.m_materials.layout(),
+      *layout,
       0,
-      *engine.m_materials.descriptorSet(m_frameIndex),
+      *descriptorSet,
       nullptr
     );
 
-    const auto& [vertexBuffer, indexBuffer, indirectBuffer, commandCount, transformIndex] = engine.m_objects[material];
-    engineData.transformIndex = transformIndex;
+    const auto& [vertexBuffer, indexBuffer, indirectBuffer, commandCount] = engine.m_objects[material];
 
     m_renderCmds[m_frameIndex].pushConstants(
-      engine.m_materials.layout(),
+      *layout,
       all_stages,
       0,
       vk::ArrayProxy<const char>(sizeof(EngineData), reinterpret_cast<const char *>(&engineData))
