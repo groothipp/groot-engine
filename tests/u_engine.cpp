@@ -1,5 +1,6 @@
 #include "src/include/buffer.hpp"
 #include "src/include/engine.hpp"
+#include "src/include/linalg.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -41,22 +42,29 @@ TEST_CASE( "engine", "[unit][engine]" ) {
     ge::Buffer buffer2(ge::vec3(0.0f, 1.0f, 0.0f));
     ge::Buffer buffer3(ge::vec3(0.0f, 0.0f, 1.0f));
 
+    ge::vec3 tint1(1.0f, 0.1f, 0.1f);
+    ge::vec3 tint2(0.1f, 1.0f, 0.1f);
+    ge::vec3 tint3(0.1f, 0.1f, 1.0f);
+
     engine.add_material("test", ge::MaterialManager::Builder()
       .add_shader(ge::ShaderStage::VertexShader, "shaders/shader.vert.spv")
       .add_shader(ge::ShaderStage::FragmentShader, "shaders/shader.frag.spv")
       .add_mutable(&buffer1)
+      .add_immutable(sizeof(ge::vec3), &tint1)
     );
 
     engine.add_material("test2", ge::MaterialManager::Builder()
       .add_shader(ge::ShaderStage::VertexShader, "shaders/shader.vert.spv")
       .add_shader(ge::ShaderStage::FragmentShader, "shaders/shader.frag.spv")
       .add_mutable(&buffer2)
+      .add_immutable(sizeof(ge::vec3), &tint2)
     );
 
     engine.add_material("test3", ge::MaterialManager::Builder()
       .add_shader(ge::ShaderStage::VertexShader, "shaders/shader.vert.spv")
       .add_shader(ge::ShaderStage::FragmentShader, "shaders/shader.frag.spv")
       .add_mutable(&buffer3)
+      .add_immutable(sizeof(ge::vec3), &tint3)
     );
 
     ge::transform obj1 = engine.add_object("test", "../tests/dat/circle.obj",

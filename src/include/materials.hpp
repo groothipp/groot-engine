@@ -51,13 +51,14 @@ class MaterialManager {
 
         Builder& add_shader(ShaderStage, const std::string&);
         Builder& add_mutable(BufferProxy *);
-        // Builder& add_immutable(unsigned int, void *);
+        Builder& add_immutable(unsigned int, void *);
         // Builder& add_texture();
         // Builder& add_canvas();
 
       private:
         std::map<vk::ShaderStageFlagBits, std::string> m_shaders;
         std::vector<BufferProxy *> m_mutables;
+        std::vector<std::pair<unsigned int, void *>> m_immutables;
     };
 
   private:
@@ -169,6 +170,9 @@ class Material {
     vk::raii::DeviceMemory m_mutableMemory = nullptr;
     std::vector<vk::raii::Buffer> m_mutableBuffers;
     void * m_mutableMap = nullptr;
+
+    vk::raii::DeviceMemory m_immutableMemory = nullptr;
+    std::vector<vk::raii::Buffer> m_immutableBuffers;
 };
 
 } // namespace ge

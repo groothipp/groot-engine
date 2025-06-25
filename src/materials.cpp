@@ -3,6 +3,7 @@
 #include "src/include/engine.hpp"
 #include "src/include/materials.hpp"
 #include "src/include/parsers.hpp"
+#include "vulkan/vulkan_enums.hpp"
 
 namespace ge {
 
@@ -13,6 +14,11 @@ MaterialManager::Builder& MaterialManager::Builder::add_shader(ShaderStage stage
 
 MaterialManager::Builder& MaterialManager::Builder::add_mutable(BufferProxy * buffer) {
   m_mutables.emplace_back(buffer);
+  return *this;
+}
+
+MaterialManager::Builder& MaterialManager::Builder::add_immutable(unsigned int size, void * data) {
+  m_immutables.emplace_back(std::make_pair(size, data));
   return *this;
 }
 
@@ -124,6 +130,15 @@ void Material::createLayout(const Engine& engine, const MaterialManager::Builder
   }};
 
   unsigned int binding = 1;
+  for (const auto& immutable : builder.m_immutables) {
+    bindings.emplace_back(vk::DescriptorSetLayoutBinding{
+      .binding          = binding++,
+      .descriptorType   = vk::DescriptorType::eStorageBuffer,
+      .descriptorCount  = 1,
+      .stageFlags       = vk::ShaderStageFlagBits::eAll
+    });
+  }
+
   for (const auto * buffer : builder.m_mutables) {
     bindings.emplace_back(vk::DescriptorSetLayoutBinding{
       .binding          = binding++,
@@ -252,6 +267,8 @@ void Material::createPipeline(const Engine& engine, const MaterialManager::Build
 void Material::createDescriptors(const Engine& engine, const std::vector<mat4>& matrices, const MaterialManager::Builder& builder) {
   std::vector<vk::BufferCreateInfo> transformInfos;
   std::vector<vk::BufferCreateInfo> mutableInfos;
+  std::vector<vk::BufferCreateInfo> immutableTransferInfos;
+  std::vector<vk::BufferCreateInfo> immutableInfos;
 
   for (unsigned int i = 0; i < engine.m_settings.buffer_mode; ++i) {
     transformInfos.emplace_back(vk::BufferCreateInfo{
@@ -266,6 +283,18 @@ void Material::createDescriptors(const Engine& engine, const std::vector<mat4>& 
       });
       if (i == 0) buffer->m_material = this;
     }
+  }
+
+  for (const auto& [size, data] : builder.m_immutables) {
+    immutableTransferInfos.emplace_back(vk::BufferCreateInfo{
+      .size   = size,
+      .usage  = vk::BufferUsageFlagBits::eTransferSrc
+    });
+
+    immutableInfos.emplace_back(vk::BufferCreateInfo{
+      .size   = size,
+      .usage  = vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst
+    });
   }
 
   auto [tmp_transformMem, tmp_transformBufs, tmp_transformOffs, transformSize] = Allocator::bufferPool(engine, transformInfos,
@@ -296,13 +325,50 @@ void Material::createDescriptors(const Engine& engine, const std::vector<mat4>& 
     }
   }
 
+  auto [immutableTMem, immutableTBufs, immutableTOffs, immutableTSize] = Allocator::bufferPool(engine, immutableTransferInfos,
+    vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent
+  );
+
+  void * immutableTMap = immutableTMem.mapMemory(0, immutableTSize);
+  for (unsigned int i = 0; i < immutableTOffs.size(); ++i) {
+    auto& [size, data] = builder.m_immutables[i];
+    memcpy(reinterpret_cast<char *>(immutableTMap) + immutableTOffs[i], data, size);
+  }
+  immutableTMem.unmapMemory();
+
+  auto [tmp_immutableMem, tmp_immutableBufs, immutableOffs, immutableSize] = Allocator::bufferPool(engine, immutableInfos,
+    vk::MemoryPropertyFlagBits::eDeviceLocal
+  );
+  m_immutableMemory = std::move(tmp_immutableMem);
+  m_immutableBuffers = std::move(tmp_immutableBufs);
+
+  vk::raii::CommandBuffer transferCmd = std::move(engine.getCmds(QueueFamilyType::Transfer, 1)[0]);
+  transferCmd.begin({ .flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit });
+
+  for (unsigned int i = 0; i < m_immutableBuffers.size(); ++i) {
+    auto& [size, data] = builder.m_immutables[i];
+    transferCmd.copyBuffer(immutableTBufs[i], m_immutableBuffers[i], vk::BufferCopy{ .size = size });
+  }
+
+  transferCmd.end();
+
+  vk::raii::Fence fence = std::move(Allocator::fences(engine, 1)[0]);
+
+  engine.m_context.queueFamily(QueueFamilyType::Transfer).queue.submit(vk::SubmitInfo{
+    .commandBufferCount = 1,
+    .pCommandBuffers    = &*transferCmd
+  }, fence);
+
+  if (engine.m_context.device().waitForFences(*fence, true, ge_timeout) != vk::Result::eSuccess)
+    throw std::runtime_error("groot-engine: hung waiting for immutable transfer");
 }
 
 void Material::createSets(const Engine& engine, const MaterialManager::Builder& builder) {
-  unsigned int mutableCount = engine.m_settings.buffer_mode * (1 + builder.m_mutables.size());
+  unsigned int storageCount =
+    engine.m_settings.buffer_mode * (1 + builder.m_mutables.size() + builder.m_immutables.size());
 
   auto [tmp_pool, tmp_sets] = Allocator::descriptorPool(engine, m_setLayout,
-    mutableCount,
+    storageCount,
     0,
     0,
     0
@@ -311,10 +377,10 @@ void Material::createSets(const Engine& engine, const MaterialManager::Builder& 
   m_sets = std::move(tmp_sets);
 
   std::vector<vk::DescriptorBufferInfo> bufferInfos;
-  bufferInfos.reserve(mutableCount);
+  bufferInfos.reserve(storageCount);
 
   std::vector<vk::WriteDescriptorSet> writes;
-  writes.reserve(mutableCount);
+  writes.reserve(storageCount);
 
   for (unsigned int i = 0; i < engine.m_settings.buffer_mode; ++i) {
     bufferInfos.emplace_back(vk::DescriptorBufferInfo{
@@ -332,9 +398,27 @@ void Material::createSets(const Engine& engine, const MaterialManager::Builder& 
     });
 
     unsigned int binding = 1;
+    unsigned int j = 0;
+    for (auto& immutable : builder.m_immutables) {
+      bufferInfos.emplace_back(vk::DescriptorBufferInfo{
+        .buffer = m_immutableBuffers[j++],
+        .offset = 0,
+        .range  = vk::WholeSize
+      });
+
+      writes.emplace_back(vk::WriteDescriptorSet{
+        .dstSet           = m_sets[i],
+        .dstBinding       = binding++,
+        .descriptorCount  = 1,
+        .descriptorType   = vk::DescriptorType::eStorageBuffer,
+        .pBufferInfo      = &bufferInfos.back()
+      });
+    }
+
+    j = i * builder.m_mutables.size();
     for (auto * buffer : builder.m_mutables) {
       bufferInfos.emplace_back(vk::DescriptorBufferInfo{
-        .buffer = *m_mutableBuffers[i * builder.m_mutables.size() + binding - 1],
+        .buffer = *m_mutableBuffers[j++],
         .offset = 0,
         .range  = vk::WholeSize
       });
