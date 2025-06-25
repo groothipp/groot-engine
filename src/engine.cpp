@@ -143,7 +143,7 @@ void Engine::updateTimes() {
 
 void Engine::batchUpdates() {
   m_objects.update(m_frameTime);
-  m_materials.updateTransforms(m_renderer.frameIndex(), m_objects.transforms());
+  m_materials.update(m_renderer.frameIndex(), m_objects.transforms());
 }
 
 } // namespace ge

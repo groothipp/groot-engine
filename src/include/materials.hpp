@@ -16,6 +16,7 @@
 
 namespace ge {
 
+class BufferProxy;
 class Engine;
 class Material;
 
@@ -49,9 +50,14 @@ class MaterialManager {
         Builder& operator=(Builder&&) = default;
 
         Builder& add_shader(ShaderStage, const std::string&);
+        Builder& add_mutable(BufferProxy *);
+        // Builder& add_immutable(unsigned int, void *);
+        // Builder& add_texture();
+        // Builder& add_canvas();
 
       private:
         std::map<vk::ShaderStageFlagBits, std::string> m_shaders;
+        std::vector<BufferProxy *> m_mutables;
     };
 
   private:
@@ -101,7 +107,7 @@ class MaterialManager {
 
     void add(const std::string&, const Builder&);
     void load(const Engine&, const std::map<std::string, std::vector<mat4>>&);
-    void updateTransforms(unsigned int, const std::map<std::string, std::vector<mat4>>&);
+    void update(unsigned int, const std::map<std::string, std::vector<mat4>>&);
 
   private:
     std::map<std::string, Builder> m_builders;
@@ -121,7 +127,7 @@ class Material {
   >;
 
   public:
-    Material(const Engine&, const MaterialManager::Builder&, const std::vector<mat4>&);
+    Material() = default;
     Material(const Material&) = delete;
     Material(Material&&) = default;
 
@@ -132,17 +138,22 @@ class Material {
 
     Output operator*() const;
 
+    void load(const Engine&, const MaterialManager::Builder&, const std::vector<mat4>&);
+    void batchMutable(void *, unsigned int, const std::vector<unsigned int>&);
     void updateTransforms(unsigned int, const std::vector<mat4>&);
+    void updateMutables(unsigned int);
 
   private:
     ShaderStages getShaderStages(const Engine&, const MaterialManager::Builder&) const;
 
-    void createLayout(const Engine&);
+    void createLayout(const Engine&, const MaterialManager::Builder&);
     void createPipeline(const Engine&, const MaterialManager::Builder&);
-    void createDescriptors(const Engine&, const std::vector<mat4>&);
-    void createSets(const Engine&);
+    void createDescriptors(const Engine&, const std::vector<mat4>&, const MaterialManager::Builder&);
+    void createSets(const Engine&, const MaterialManager::Builder&);
 
   private:
+    std::map<void *, std::pair<unsigned int, std::vector<unsigned int>>> m_mutableUpdates;
+
     vk::raii::PipelineLayout m_layout = nullptr;
     vk::raii::Pipeline m_pipeline = nullptr;
 
@@ -150,10 +161,14 @@ class Material {
     vk::raii::DescriptorPool m_pool = nullptr;
     vk::raii::DescriptorSets m_sets = nullptr;
 
-    vk::raii::DeviceMemory m_memory = nullptr;
-    std::vector<vk::raii::Buffer> m_buffers;
-    std::vector<unsigned int> m_offsets;
-    void * m_map = nullptr;
+    vk::raii::DeviceMemory m_transformMemory = nullptr;
+    std::vector<vk::raii::Buffer> m_transformBuffers;
+    std::vector<unsigned int> m_transformOffsets;
+    void * m_transformMap = nullptr;
+
+    vk::raii::DeviceMemory m_mutableMemory = nullptr;
+    std::vector<vk::raii::Buffer> m_mutableBuffers;
+    void * m_mutableMap = nullptr;
 };
 
 } // namespace ge
