@@ -5,28 +5,24 @@
 
 namespace ge {
 
-MaterialManager::Builder& MaterialManager::Builder::add_shader(ShaderStage stage, std::string path) {
+MaterialManager::Builder& MaterialManager::Builder::add_shader(ShaderStage stage, const std::string& path) {
   m_shaders[static_cast<vk::ShaderStageFlagBits>(stage)] = path;
   return *this;
 }
 
 MaterialManager::Iterator::Iterator(
-  const MaterialManager * manager,
-  const std::map<std::string, unsigned int>::const_iterator& iterator
-) : m_manager(manager), m_iterator(iterator) {}
+  const MaterialManager * m, const std::map<std::string, Material>::const_iterator& itr
+) : m_manager(m), m_iterator(itr)
+{}
 
 bool MaterialManager::Iterator::operator!=(const Iterator& rhs) const {
   return m_iterator != rhs.m_iterator;
 }
 
 MaterialManager::Iterator::Output MaterialManager::Iterator::operator*() const {
-  auto& [tag, material] = *m_iterator;
-  return Output(
-    tag,
-    m_manager->m_pipelines[material],
-    m_manager->m_layouts[material],
-    m_manager->m_sets[m_manager->m_frameIndex * m_manager->m_materials.size() + material]
-  );
+  const auto& [pipeline, layout, sets] = *m_iterator->second;
+
+  return { m_iterator->first, pipeline, layout, sets };
 }
 
 MaterialManager::Iterator& MaterialManager::Iterator::operator++() {
@@ -42,70 +38,44 @@ MaterialManager::Iterator MaterialManager::end() const {
   return Iterator(this, m_materials.end());
 }
 
-bool MaterialManager::exists(std::string tag) const {
-  return m_materials.contains(tag);
+bool MaterialManager::exists(const std::string& tag) const {
+  return m_builders.contains(tag) || m_materials.contains(tag);
 }
 
 void MaterialManager::add(const std::string& tag, const Builder& builder) {
-  m_materials.emplace(tag, static_cast<unsigned int>(m_builders.size()));
-  m_builders.emplace_back(builder);
-}
-
-void MaterialManager::add(const std::string& tag, Builder&& builder) {
-  m_materials.emplace(tag, static_cast<unsigned int>(m_builders.size()));
-  m_builders.emplace_back(std::move(builder));
+  m_builders[tag] = builder;
 }
 
 void MaterialManager::load(const Engine& engine, const std::map<std::string, std::vector<mat4>>& transforms) {
-  if (transforms.size() != m_materials.size())
-    throw std::runtime_error("groot-engine: missing transform data");
-
-  for (auto& [tag, material] : m_materials) {
-    createLayout(engine);
-    createPipeline(engine, m_builders[material]);
-  }
-
-  createDescriptors(engine, transforms);
-
-  unsigned int storageCount = engine.m_settings.buffer_mode * transforms.size();
-  unsigned int uniformCount, imageCount, samplerCount;
-  uniformCount = imageCount = samplerCount = 0;
-
-  auto [tmp_setPool, tmp_sets] = Allocator::descriptorPool(engine, m_setLayouts,
-    storageCount,
-    uniformCount,
-    imageCount,
-    samplerCount
-  );
-  m_setPool = std::move(tmp_setPool);
-  m_sets = std::move(tmp_sets);
-
-  updateSets(engine);
+  for (const auto& [material, matrices] : transforms)
+    m_materials.emplace(material, std::move(Material(engine, m_builders[material], matrices)));
 }
 
-void MaterialManager::updateTransforms(const std::map<std::string, std::vector<mat4>>& transforms) {
-  for (const auto& [material, matrices] : transforms) {
-    if (!m_materials.contains(material)) continue;
-
-    unsigned int index = m_frameIndex * m_materials.size() + m_materials.at(material);
-
-    memcpy(
-      reinterpret_cast<char *>(m_transformMap) + m_transformOffsets[index],
-      matrices.data(),
-      sizeof(mat4) * matrices.size()
-    );
-  }
+void MaterialManager::updateTransforms(unsigned int frameIndex, const std::map<std::string, std::vector<mat4>>& transforms) {
+  for (const auto& [material, matrices] : transforms)
+    m_materials.at(material).updateTransforms(frameIndex, matrices);
 }
 
-void MaterialManager::updateFrameIndex(const Engine& engine) {
-  m_frameIndex = engine.m_renderer.frameIndex();
+Material::Material(const Engine& engine, const MaterialManager::Builder& builder, const std::vector<mat4>& matrices) {
+  createLayout(engine);
+  createPipeline(engine, builder);
+  createDescriptors(engine, matrices);
+  createSets(engine);
 }
 
-MaterialManager::ShaderStages MaterialManager::getShaderStages(const Engine& engine, const Builder& builder) const {
+Material::Output Material::operator*() const {
+  return { m_pipeline, m_layout, m_sets };
+}
+
+void Material::updateTransforms(unsigned int frameIndex, const std::vector<mat4>& matrices) {
+  memcpy(reinterpret_cast<char *>(m_map) + m_offsets[frameIndex], matrices.data(), sizeof(mat4) * matrices.size());
+}
+
+Material::ShaderStages Material::getShaderStages(const Engine& engine, const MaterialManager::Builder& builder) const {
   std::vector<vk::raii::ShaderModule> modules;
   std::vector<vk::PipelineShaderStageCreateInfo> infos;
 
-  for (auto [stage, path] : builder.m_shaders) {
+  for (const auto& [stage, path] : builder.m_shaders) {
     std::vector<char> code = SPVParser::parse(path);
 
     modules.emplace_back(engine.m_context.device().createShaderModule(vk::ShaderModuleCreateInfo{
@@ -123,33 +93,33 @@ MaterialManager::ShaderStages MaterialManager::getShaderStages(const Engine& eng
   return { std::move(modules), std::move(infos) };
 }
 
-void MaterialManager::createLayout(const Engine& engine) {
-  vk::DescriptorSetLayoutBinding transformBinding{
+void Material::createLayout(const Engine& engine) {
+  vk::DescriptorSetLayoutBinding binding{
     .binding          = 0,
     .descriptorType   = vk::DescriptorType::eStorageBuffer,
     .descriptorCount  = 1,
     .stageFlags       = vk::ShaderStageFlagBits::eVertex
   };
 
-  m_setLayouts.emplace_back(engine.m_context.device().createDescriptorSetLayout(vk::DescriptorSetLayoutCreateInfo{
+  m_setLayout = engine.m_context.device().createDescriptorSetLayout(vk::DescriptorSetLayoutCreateInfo{
     .bindingCount = 1,
-    .pBindings    = &transformBinding
-  }));
+    .pBindings    = &binding
+  });
 
   vk::PushConstantRange range{
-    .stageFlags = all_stages,
+    .stageFlags = vk::ShaderStageFlagBits::eAll,
     .size       = sizeof(EngineData)
   };
 
-  m_layouts.emplace_back(engine.m_context.device().createPipelineLayout(vk::PipelineLayoutCreateInfo{
+  m_layout = engine.m_context.device().createPipelineLayout(vk::PipelineLayoutCreateInfo{
     .setLayoutCount         = 1,
-    .pSetLayouts            = &*m_setLayouts.back(),
+    .pSetLayouts            = &*m_setLayout,
     .pushConstantRangeCount = 1,
     .pPushConstantRanges    = &range
-  }));
+  });
 }
 
-void MaterialManager::createPipeline(const Engine& engine, const Builder& builder) {
+void Material::createPipeline(const Engine& engine, const MaterialManager::Builder& builder) {
   auto [modules, ci_stages] = getShaderStages(engine, builder);
 
   vk::DynamicState dynStates[2] = {
@@ -231,7 +201,7 @@ void MaterialManager::createPipeline(const Engine& engine, const Builder& builde
     .depthAttachmentFormat    = engine.m_settings.depth_format
   };
 
-  m_pipelines.emplace_back(engine.m_context.device().createGraphicsPipeline(nullptr, vk::GraphicsPipelineCreateInfo{
+  m_pipeline = engine.m_context.device().createGraphicsPipeline(nullptr, vk::GraphicsPipelineCreateInfo{
     .pNext                = &ci_rendering,
     .stageCount           = static_cast<unsigned int>(ci_stages.size()),
     .pStages              = ci_stages.data(),
@@ -243,65 +213,59 @@ void MaterialManager::createPipeline(const Engine& engine, const Builder& builde
     .pDepthStencilState   = &ci_depth,
     .pColorBlendState     = &ci_blend,
     .pDynamicState        = &ci_dynState,
-    .layout               = m_layouts.back()
-  }));
+    .layout               = m_layout
+  });
 }
 
-void MaterialManager::createDescriptors(const Engine& engine, const std::map<std::string, std::vector<mat4>>& transforms) {
-  std::vector<vk::BufferCreateInfo> transformInfos;
+void Material::createDescriptors(const Engine& engine, const std::vector<mat4>& matrices) {
+  std::vector<vk::BufferCreateInfo> bufferInfos;
   for (unsigned int i = 0; i < engine.m_settings.buffer_mode; ++i) {
-    for (const auto& [material, matrices] : transforms) {
-      transformInfos.emplace_back(vk::BufferCreateInfo{
-        .size         = static_cast<unsigned int>(sizeof(mat4) * matrices.size()),
-        .usage        = vk::BufferUsageFlagBits::eStorageBuffer,
-        .sharingMode  = vk::SharingMode::eExclusive
-      });
-    }
+    bufferInfos.emplace_back(vk::BufferCreateInfo{
+      .size   = sizeof(mat4) * matrices.size(),
+      .usage  = vk::BufferUsageFlagBits::eStorageBuffer,
+    });
   }
 
-  auto [tmp_transMem, tmp_transBufs, tmp_transOffs, transSize] = Allocator::bufferPool(engine, transformInfos,
+  auto [tmp_mem, tmp_bufs, tmp_offs, allocationSize] = Allocator::bufferPool(engine, bufferInfos,
     vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent
   );
-  m_transformMemory = std::move(tmp_transMem);
-  m_transformBuffers = std::move(tmp_transBufs);
-  m_transformOffsets = std::move(tmp_transOffs);
+  m_memory = std::move(tmp_mem);
+  m_buffers = std::move(tmp_bufs);
+  m_offsets = std::move(tmp_offs);
 
-  m_transformMap = m_transformMemory.mapMemory(0, transSize);
-  for (unsigned int i = 0; i < engine.m_settings.buffer_mode; ++i) {
-    unsigned int j = 0;
-    for (const auto& [material, matrices] : transforms)
-      updateTransforms(matrices, i * transforms.size() + j++);
-  }
+  m_map = m_memory.mapMemory(0, allocationSize);
+
+  for (unsigned int i = 0; i < engine.m_settings.buffer_mode; ++i)
+    updateTransforms(i, matrices);
 }
 
-void MaterialManager::updateSets(const Engine& engine) {
-  std::vector<vk::WriteDescriptorSet> writes;
+void Material::createSets(const Engine& engine) {
+  auto [tmp_pool, tmp_sets] = Allocator::descriptorPool(engine, m_setLayout,
+    engine.m_settings.buffer_mode,
+    0,
+    0,
+    0
+  );
+  m_pool = std::move(tmp_pool);
+  m_sets = std::move(tmp_sets);
 
-  unsigned int i = 0;
-  for (const auto& buffer : m_transformBuffers) {
-    vk::DescriptorBufferInfo info{
-      .buffer = *buffer,
+  std::vector<vk::WriteDescriptorSet> writes;
+  for (unsigned int i = 0; i < engine.m_settings.buffer_mode; ++i) {
+    vk::DescriptorBufferInfo bufferInfo{
+      .buffer = m_buffers[i],
       .range  = vk::WholeSize
     };
 
     writes.emplace_back(vk::WriteDescriptorSet{
-      .dstSet           = m_sets[i++],
+      .dstSet           = m_sets[i],
       .dstBinding       = 0,
       .descriptorCount  = 1,
       .descriptorType   = vk::DescriptorType::eStorageBuffer,
-      .pBufferInfo      = &info
+      .pBufferInfo      = &bufferInfo
     });
   }
 
   engine.m_context.device().updateDescriptorSets(writes, nullptr);
-}
-
-void MaterialManager::updateTransforms(const std::vector<mat4>& transforms, unsigned int index) {
-  memcpy(
-    reinterpret_cast<char *>(m_transformMap) + m_transformOffsets[index],
-    transforms.data(),
-    sizeof(mat4) * transforms.size()
-  );
 }
 
 } // namespace ge

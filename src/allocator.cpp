@@ -18,10 +18,11 @@ Allocator::BufferOutput Allocator::bufferPool(
     buffers.emplace_back(engine.m_context.device().createBuffer(info));
     vk::MemoryRequirements requirements = buffers.back().getMemoryRequirements();
 
-    offsets.emplace_back((allocationSize + requirements.size - 1) / requirements.size * requirements.size);
+    while (allocationSize % requirements.alignment != 0) ++allocationSize;
+    offsets.emplace_back(allocationSize);
 
     filter &= requirements.memoryTypeBits;
-    allocationSize += offsets.back() + requirements.size;
+    allocationSize += requirements.size;
   }
 
   memory = allocate(engine, allocationSize, filter, flags);
@@ -100,7 +101,7 @@ Allocator::SemaphoreOutput Allocator::semaphores(const Engine& engine, unsigned 
 }
 
 Allocator::DescriptorOutput Allocator::descriptorPool(
-  const Engine& engine, const std::vector<vk::raii::DescriptorSetLayout>& setLayouts,
+  const Engine& engine, const vk::raii::DescriptorSetLayout& setLayout,
   unsigned int storageCount,
   unsigned int uniformCount,
   unsigned int imageCount,
@@ -139,20 +140,18 @@ Allocator::DescriptorOutput Allocator::descriptorPool(
 
   vk::raii::DescriptorPool pool = engine.m_context.device().createDescriptorPool(vk::DescriptorPoolCreateInfo{
     .flags          = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet,
-    .maxSets        = static_cast<unsigned int>(engine.m_settings.buffer_mode * setLayouts.size()),
+    .maxSets        = engine.m_settings.buffer_mode,
     .poolSizeCount  = static_cast<unsigned int>(poolSizes.size()),
     .pPoolSizes     = poolSizes.data()
   });
 
   std::vector<vk::DescriptorSetLayout> layouts;
-  for (unsigned int i = 0; i < engine.m_settings.buffer_mode; ++i) {
-    for (const auto& layout : setLayouts)
-      layouts.emplace_back(*layout);
-  }
+  for (unsigned int i = 0; i < engine.m_settings.buffer_mode; ++i)
+    layouts.emplace_back(*setLayout);
 
   vk::raii::DescriptorSets sets(engine.m_context.device(), vk::DescriptorSetAllocateInfo{
     .descriptorPool     = pool,
-    .descriptorSetCount = static_cast<unsigned int>(engine.m_settings.buffer_mode * setLayouts.size()),
+    .descriptorSetCount = engine.m_settings.buffer_mode,
     .pSetLayouts        = layouts.data()
   });
 

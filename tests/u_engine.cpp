@@ -1,6 +1,7 @@
 #include "src/include/engine.hpp"
 
 #include <catch2/catch_test_macros.hpp>
+#include <iostream>
 
 TEST_CASE( "engine", "[unit][engine]" ) {
   ge::Engine engine;
@@ -37,46 +38,65 @@ TEST_CASE( "engine", "[unit][engine]" ) {
       .add_shader(ge::ShaderStage::FragmentShader, "shaders/shader.frag.spv")
     );
 
+    engine.add_material("test2", ge::MaterialManager::Builder()
+      .add_shader(ge::ShaderStage::VertexShader, "shaders/shader.vert.spv")
+      .add_shader(ge::ShaderStage::FragmentShader, "shaders/shader2.frag.spv")
+    );
+
+    engine.add_material("test3", ge::MaterialManager::Builder()
+      .add_shader(ge::ShaderStage::VertexShader, "shaders/shader.vert.spv")
+      .add_shader(ge::ShaderStage::FragmentShader, "shaders/shader3.frag.spv")
+    );
+
     ge::transform obj1 = engine.add_object("test", "../tests/dat/circle.obj",
-      ge::Transform(ge::vec3(0.0f, 0.0f, 3.0f), ge::vec3(0.0f), ge::vec3(0.8f, 0.8f, 0.8f))
+      ge::Transform(ge::vec3(-1.5f, -0.75f, 0.0f), ge::vec3(0.0f), ge::vec3(0.3))
     );
 
-    ge::transform obj2 = engine.add_object("test", "../tests/dat/quad.obj",
-      ge::Transform(ge::vec3(0.0f, 0.0f, 1.5f), ge::vec3(0.0f), ge::vec3(1.0f))
+    ge::transform obj2 = engine.add_object("test", "../tests/dat/circle.obj",
+      ge::Transform(ge::vec3(-1.5f, -0.75f, 0.15f), ge::vec3(0.0f), ge::vec3(0.3f))
     );
 
-    ge::transform obj3 = engine.add_object("test", "../tests/dat/pentagon.obj",
-      ge::Transform(ge::vec3(3.0f, 0.0f, 2.0f), ge::vec3(0.0f), ge::vec3(0.74f))
+    ge::transform obj3 = engine.add_object("test2", "../tests/dat/quad.obj",
+      ge::Transform(ge::vec3(1.5f, 0.75f, 0.0f), ge::vec3(0.0f), ge::vec3(0.6f))
     );
 
-    float w = 0.05;
-    float a = 1.5f;
-    float av = ge::radians(40.0f);
+    ge::transform obj4 = engine.add_object("test2", "../tests/dat/quad.obj",
+      ge::Transform(ge::vec3(1.5f, 0.75f, 0.15f), ge::vec3(0.0f), ge::vec3(0.6f))
+    );
+
+    ge::transform obj5 = engine.add_object("test3", "../tests/dat/pentagon.obj",
+      ge::Transform(ge::vec3(-1.5f, 0.0f, -0.15f), ge::vec3(0.0f), ge::vec3(0.23f))
+    );
+
+    ge::transform obj6 = engine.add_object("test3", "../tests/dat/pentagon.obj",
+      ge::Transform(ge::vec3(0.0f, -0.75f, -0.15f), ge::vec3(0.0f), ge::vec3(0.23f))
+    );
+
+    std::tuple<
+      ge::transform&, ge::transform&, ge::transform&, ge::transform&, ge::transform&, ge::transform&
+    > transforms = { obj1, obj2, obj3, obj4, obj5, obj6 };
+
+    float w = ge::radians(5.0f), ax = 1.5f, ay = 0.75f;
 
     bool success = true;
     try {
-      engine.run([&obj1, &obj2, &obj3, &w, &a, &av](double dt) {
-        float x1 = w * a * std::cos(w * obj1->elapsed_time()) * dt;
-        float z1 = w * a * std::sin(w * obj1->elapsed_time()) * dt;
+      engine.run([&transforms, &w, &ax, &ay](double dt) {
+        auto& [obj1, obj2, obj3, obj4, obj5, obj6] = transforms;
 
-        float x2 = w * a * std::cos(w * obj2->elapsed_time()) * dt;
-        float y2 = w * a * std::sin(w * obj2->elapsed_time()) * dt;
+        float dx = w * ax * std::sin(w * obj1->elapsed_time()) * dt;
+        float dy = w * ay * std::sin(w * obj1->elapsed_time()) * dt;
 
-        float y3 = w * a * std::cos(w * obj3->elapsed_time()) * dt;
-        float z3 = w * a * std::sin(w * obj3->elapsed_time()) * dt;
-
-        obj1->translate(ge::vec3(x1, 0.0f, z1));
-        obj1->rotate(ge::vec3(0.0f, 0.0f, -av * dt));
-
-        obj2->translate(ge::vec3(x2, y2, 0.0f));
-        obj2->rotate(ge::vec3(0.0f, 0.0f, -av * dt));
-
-        obj3->translate(ge::vec3(0.0f, y3, z3));
-        obj3->rotate(ge::vec3(0.0f, 0.0f, -av * dt));
+        obj1->translate({ dx, 0.0f, 0.0f });
+        obj2->translate({ 0.0f, dy, 0.0f });
+        obj3->translate({ -dx, 0.0f, 0.0f });
+        obj4->translate({ 0.0f, -dy, 0.0f });
+        obj5->translate({ dx, 0.0f, 0.0f });
+        obj6->translate({ 0.0f, dy, 0.0f });
       });
     }
     catch (const std::exception& e) {
       success = false;
+      std::cout << e.what() << '\n';
     }
     CHECK( success );
   }

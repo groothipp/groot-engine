@@ -5,186 +5,163 @@
 
 namespace ge {
 
-const ObjectManager::Output ObjectManager::operator[](std::string material) const {
-  const ObjectData& obj = m_objects.at(material);
+ObjectManager::Output ObjectManager::operator[](const std::string& material) const {
+  if (!m_objects.contains(material))
+    throw std::out_of_range("groot-engine: no objects with material '" + material + "'");
 
-  return {
-    m_vertexBuffers[obj.bufferIndex],
-    m_indexBuffers[obj.bufferIndex],
-    m_indirectBuffers[obj.bufferIndex],
-    obj.commands.size(),
-  };
+  const auto& [buffers, commandCount] = *m_objects.at(material);
+
+  return { buffers[0], buffers[1], buffers[2], commandCount };
 }
 
-bool ObjectManager::hasObjects(std::string material) const {
+bool ObjectManager::hasObjects(const std::string& material) const {
   return m_objects.contains(material);
 }
 
-unsigned int ObjectManager::commandSize() const {
-  return sizeof(IndirectCommand);
+std::map<std::string, std::vector<mat4>> ObjectManager::transforms() const {
+  std::map<std::string, std::vector<mat4>> mats;
+
+  for (const auto& [material, object] : m_objects)
+    mats.emplace(material, object.transforms());
+
+  return mats;
 }
 
-const std::map<std::string, std::vector<mat4>> ObjectManager::transforms() const {
-  std::map<std::string, std::vector<mat4>> matrices;
+transform ObjectManager::add(const Engine& engine,
+  const std::string& material, const std::string& objFile, const Transform& t
+) {
+  if (!engine.m_materials.exists(material))
+    throw std::runtime_error("groot-engine: tried to add object with material that does not exist");
 
-  for (auto& [material, data] : m_objects)
-    matrices.emplace(material, data.matrices);
-
-  return matrices;
-}
-
-transform ObjectManager::add(const std::string& material, const std::string& path, const Transform& transform) {
-  auto [vertices, indices] = ObjParser::parse(path);
-
-  ObjectData& obj = m_objects[material];
-  obj.commands.emplace_back(IndirectCommand{
-    .indexCount     = static_cast<unsigned int>(indices.size()),
-    .instanceCount  = 1,
-    .firstIndex     = static_cast<unsigned int>(obj.indices.size()),
-    .vertexOffset   = static_cast<unsigned int>(obj.vertices.size()),
-    .firstInstance  = static_cast<unsigned int>(obj.commands.size())
-  });
-  obj.vertices.insert(obj.vertices.end(), vertices.begin(), vertices.end());
-  obj.indices.insert(obj.indices.end(), indices.begin(), indices.end());
-  obj.transforms.emplace_back(std::make_shared<Transform>(transform));
-  obj.matrices.emplace_back(transform.matrix());
-
-  obj.transforms.back()->m_manager = this;
-  obj.transforms.back()->m_location = { material, obj.transforms.size() - 1 };
-  return obj.transforms.back();
-}
-
-void ObjectManager::batch(const std::pair<std::string, unsigned int>& location, const std::tuple<vec3, vec3, vec3>& vals) {
-  m_updates.insert_or_assign(location, vals);
-}
-
-void ObjectManager::updateTransforms() {
-  for (auto& [location, vals] : m_updates) {
-    auto [position, rotation, scale] = vals;
-    auto [material, index] = location;
-
-    m_objects[material].matrices[index] = mat4::translation(position) *
-                                          mat4::rotation(rotation) *
-                                          mat4::scale(scale);
+  if (!m_objData.contains(objFile)) {
+    auto [vertices, indices] = ObjParser::parse(objFile);
+    m_objData.emplace(objFile, std::make_pair(vertices, indices));
   }
-}
+  const auto& [vertices, indices] = m_objData.at(objFile);
 
-void ObjectManager::updateTimes(double time) {
-  for (auto& [material, obj] : m_objects) {
-    for (auto& transform : obj.transforms)
-      transform->m_time += time;
-  }
+  transform obj = m_objects[material].add(vertices, indices, t);
+  obj->m_object = &m_objects.at(material);
+
+  return obj;
 }
 
 void ObjectManager::load(const Engine& engine) {
-  if (m_objects.empty()) return;
-
-  std::vector<vk::BufferCreateInfo> vertInfos;
-  std::vector<vk::BufferCreateInfo> indInfos;
-  std::vector<vk::BufferCreateInfo> indirInfos;
-
-  for (auto& [material, obj] : m_objects) {
-    obj.bufferIndex = vertInfos.size();
-
-    vertInfos.emplace_back(vk::BufferCreateInfo{
-      .size         = obj.vertices.size() * sizeof(Vertex),
-      .usage        = vk::BufferUsageFlagBits::eTransferSrc,
-      .sharingMode  = vk::SharingMode::eExclusive
-    });
-
-    indInfos.emplace_back(vk::BufferCreateInfo{
-      .size         = obj.indices.size() * sizeof(unsigned int),
-      .usage        = vk::BufferUsageFlagBits::eTransferSrc,
-      .sharingMode  = vk::SharingMode::eExclusive
-    });
-
-    indirInfos.emplace_back(vk::BufferCreateInfo{
-      .size         = obj.commands.size() * sizeof(IndirectCommand),
-      .usage        = vk::BufferUsageFlagBits::eTransferSrc,
-      .sharingMode  = vk::SharingMode::eExclusive
-    });
-  }
-
-  auto [vertTransMem, vertTransBufs, vertTransOffs, vertTransSize] = Allocator::bufferPool(engine, vertInfos,
-    vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent
-  );
-
-  auto [indTransMem, indTransBufs, indTransOffs, indTransSize] = Allocator::bufferPool(engine, indInfos,
-    vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent
-  );
-
-  auto [indirTransMem, indirTransBufs, indirTransOffs, indirTransSize] = Allocator::bufferPool(engine, indirInfos,
-    vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent
-  );
-
-  void * vertMap = vertTransMem.mapMemory(0, vertTransSize);
-  void * indMap = indTransMem.mapMemory(0, indTransSize);
-  void * indirMap = indirTransMem.mapMemory(0, indirTransSize);
-
-  std::vector<std::tuple<vk::BufferCopy, vk::BufferCopy, vk::BufferCopy>> copies;
-  for (const auto& [material, obj] : m_objects) {
-    memcpy(reinterpret_cast<char *>(vertMap) + vertTransOffs[obj.bufferIndex], obj.vertices.data(), obj.vertices.size() * sizeof(Vertex));
-    memcpy(reinterpret_cast<char *>(indMap) + indTransOffs[obj.bufferIndex], obj.indices.data(), obj.indices.size() * sizeof(unsigned int));
-    memcpy(reinterpret_cast<char *>(indirMap) + indirTransOffs[obj.bufferIndex], obj.commands.data(), obj.commands.size() * sizeof(IndirectCommand));
-
-    vertInfos[obj.bufferIndex].usage = vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst;
-    indInfos[obj.bufferIndex].usage = vk::BufferUsageFlagBits::eIndexBuffer | vk::BufferUsageFlagBits::eTransferDst;
-    indirInfos[obj.bufferIndex].usage = vk::BufferUsageFlagBits::eIndirectBuffer | vk::BufferUsageFlagBits::eTransferDst;
-
-    copies.emplace_back(std::tuple<vk::BufferCopy, vk::BufferCopy, vk::BufferCopy>{
-      vk::BufferCopy{ .size = obj.vertices.size() * sizeof(Vertex) },
-      vk::BufferCopy{ .size = obj.indices.size() * sizeof(unsigned int) },
-      vk::BufferCopy{ .size = obj.commands.size() * sizeof(IndirectCommand) }
-    });
-  }
-
-  vertTransMem.unmapMemory();
-  indTransMem.unmapMemory();
-  indirTransMem.unmapMemory();
-  vertMap = indMap = indirMap = nullptr;
-
-  auto [tmp_vertMem, tmp_vertBufs, _v1, _v2] = Allocator::bufferPool(engine, vertInfos,
-    vk::MemoryPropertyFlagBits::eDeviceLocal
-  );
-  m_vertexMemory = std::move(tmp_vertMem);
-  m_vertexBuffers = std::move(tmp_vertBufs);
-
-  auto [tmp_indMem, tmp_indBufs, _i1, _i2] = Allocator::bufferPool(engine, indInfos,
-    vk::MemoryPropertyFlagBits::eDeviceLocal
-  );
-  m_indexMemory = std::move(tmp_indMem);
-  m_indexBuffers = std::move(tmp_indBufs);
-
-  auto [tmp_indirMem, tmp_indirBufs, _in1, _in2] = Allocator::bufferPool(engine, indirInfos,
-    vk::MemoryPropertyFlagBits::eDeviceLocal
-  );
-  m_indirectMemory = std::move(tmp_indirMem);
-  m_indirectBuffers = std::move(tmp_indirBufs);
-
   vk::raii::CommandBuffer transferCmd = std::move(engine.getCmds(QueueFamilyType::Transfer, 1)[0]);
   transferCmd.begin({ .flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit });
 
-  unsigned int index = 0;
-  for (const auto& [vertCopy, indCopy, indirCopy] : copies) {
-    transferCmd.copyBuffer(vertTransBufs[index], m_vertexBuffers[index], vertCopy);
-    transferCmd.copyBuffer(indTransBufs[index], m_indexBuffers[index], indCopy);
-    transferCmd.copyBuffer(indirTransBufs[index], m_indirectBuffers[index], indirCopy);
-    ++index;
+  std::vector<vk::raii::DeviceMemory> tMems;
+  std::vector<vk::raii::Buffer> tBufs;
+
+  for (auto& [material, object] : m_objects) {
+    auto [tMem, tBuf] = object.load(engine, transferCmd);
+
+    tMems.emplace_back(std::move(tMem));
+    for (auto& buf : tBuf)
+      tBufs.emplace_back(std::move(buf));
   }
 
   transferCmd.end();
 
-  vk::SubmitInfo transferSubmit{
+  vk::raii::Fence fence = std::move(Allocator::fences(engine, 1)[0]);
+
+  engine.m_context.queueFamily(QueueFamilyType::Transfer).queue.submit(vk::SubmitInfo{
     .commandBufferCount = 1,
     .pCommandBuffers    = &*transferCmd
+  }, fence);
+
+  if (engine.m_context.device().waitForFences(*fence, true, ge_timeout) != vk::Result::eSuccess)
+    throw std::runtime_error("groot-engine: hung waiting for objects to load");
+}
+
+void ObjectManager::update(double dt) {
+  for (auto& [material, object] : m_objects)
+    object.update(dt);
+}
+
+Object::Output Object::operator*() const {
+  return { m_buffers, m_commands.size() };
+}
+
+const std::vector<mat4>& Object::transforms() const {
+  return m_matrices;
+}
+
+transform Object::add(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices, const Transform& t) {
+  m_commands.emplace_back(Command{
+    .indexCount     = static_cast<unsigned int>(indices.size()),
+    .instanceCount  = 1,
+    .firstIndex     = static_cast<unsigned int>(m_indices.size()),
+    .vertexOffset   = static_cast<unsigned int>(m_vertices.size()),
+    .firstInstance  = static_cast<unsigned int>(m_commands.size())
+  });
+
+  m_vertices.insert(m_vertices.end(), vertices.begin(), vertices.end());
+  m_indices.insert(m_indices.end(), indices.begin(), indices.end());
+  m_transforms.emplace_back(std::make_shared<Transform>(t));
+
+  m_transforms.back()->m_index = m_matrices.size();
+  m_matrices.emplace_back(t.matrix());
+
+  return m_transforms.back();
+}
+
+std::pair<vk::raii::DeviceMemory, std::vector<vk::raii::Buffer>> Object::load(const Engine& engine, vk::raii::CommandBuffer& transferCmd) {
+  vk::BufferCreateInfo ci_vertexBuffer{
+    .size         = static_cast<unsigned int>(sizeof(Vertex) * m_vertices.size()),
+    .usage        = vk::BufferUsageFlagBits::eTransferSrc,
   };
 
-  vk::raii::Fence transferFence = std::move(Allocator::fences(engine, 1)[0]);
+  vk::BufferCreateInfo ci_indexBuffer{
+    .size         = static_cast<unsigned int>(sizeof(unsigned int) * m_indices.size()),
+    .usage        = vk::BufferUsageFlagBits::eTransferSrc,
+  };
 
-  engine.m_context.queueFamily(QueueFamilyType::Transfer).queue.submit(transferSubmit, transferFence);
+  vk::BufferCreateInfo ci_indirectBuffer{
+    .size         = static_cast<unsigned int>(sizeof(Command) * m_commands.size()),
+    .usage        = vk::BufferUsageFlagBits::eTransferSrc,
+  };
 
-  if (engine.m_context.device().waitForFences(*transferFence, true, ge_timeout) != vk::Result::eSuccess)
-    throw std::runtime_error("groot-engine: hung waiting for objects buffer transfer");
+  auto [tMem, tBufs, tOffs, tSize] = Allocator::bufferPool(engine, { ci_vertexBuffer, ci_indexBuffer, ci_indirectBuffer },
+    vk::MemoryPropertyFlagBits::eHostCoherent | vk::MemoryPropertyFlagBits::eHostVisible
+  );
+
+  char * tMap = reinterpret_cast<char *>(tMem.mapMemory(0, tSize));
+
+  memcpy(tMap + tOffs[0], m_vertices.data(), sizeof(Vertex) * m_vertices.size());
+  memcpy(tMap + tOffs[1], m_indices.data(), sizeof(unsigned int) * m_indices.size());
+  memcpy(tMap + tOffs[2], m_commands.data(), sizeof(Command) * m_commands.size());
+
+  tMem.unmapMemory();
+
+  ci_vertexBuffer.usage = vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eVertexBuffer;
+  ci_indexBuffer.usage = vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eIndexBuffer;
+  ci_indirectBuffer.usage = vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eIndirectBuffer;
+
+  auto [tmp_mem, tmp_bufs, _, __] = Allocator::bufferPool(engine, { ci_vertexBuffer, ci_indexBuffer, ci_indirectBuffer },
+    vk::MemoryPropertyFlagBits::eDeviceLocal
+  );
+  m_memory = std::move(tmp_mem);
+  m_buffers = std::move(tmp_bufs);
+
+  transferCmd.copyBuffer(tBufs[0], m_buffers[0], vk::BufferCopy{ .size = sizeof(Vertex) * m_vertices.size() });
+  transferCmd.copyBuffer(tBufs[1], m_buffers[1], vk::BufferCopy{ .size = sizeof(unsigned int) * m_indices.size() });
+  transferCmd.copyBuffer(tBufs[2], m_buffers[2], vk::BufferCopy{ .size = sizeof(Command) * m_commands.size() });
+
+  return { std::move(tMem), std::move(tBufs) };
+}
+
+void Object::batch(unsigned int index) {
+  if (!m_updates.contains(index))
+    m_updates.emplace(index);
+}
+
+void Object::update(double dt) {
+  for (const auto& index : m_updates)
+    m_matrices[index] = m_transforms[index]->matrix();
+  m_updates.clear();
+
+  for (auto& transform : m_transforms)
+    transform->m_time += dt;
 }
 
 } // namespace ge

@@ -43,7 +43,9 @@ struct Settings {
 
 class Engine {
   friend class Allocator;
+  friend class Material;
   friend class MaterialManager;
+  friend class Object;
   friend class ObjectManager;
   friend class Renderer;
   friend class VulkanContext;

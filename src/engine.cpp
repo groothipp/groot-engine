@@ -37,7 +37,7 @@ void Engine::add_material(std::string tag, MaterialManager::Builder&& builder) {
 transform Engine::add_object(std::string material, std::string path, const Transform& transform) {
   if (!m_materials.exists(material))
     throw std::runtime_error("groot-engine: material '" + material + "' does not exist");
-  return m_objects.add(material, path, transform);
+  return m_objects.add(*this, material, path, transform);
 }
 
 void Engine::run() {
@@ -142,11 +142,8 @@ void Engine::updateTimes() {
 }
 
 void Engine::batchUpdates() {
-  m_materials.updateFrameIndex(*this);
-  m_objects.updateTimes(m_frameTime);
-
-  m_objects.updateTransforms();
-  m_materials.updateTransforms(m_objects.transforms());
+  m_objects.update(m_frameTime);
+  m_materials.updateTransforms(m_renderer.frameIndex(), m_objects.transforms());
 }
 
 } // namespace ge

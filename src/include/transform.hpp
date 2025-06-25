@@ -2,15 +2,13 @@
 
 #include "src/include/linalg.hpp"
 
-#include <string>
-
 namespace ge {
 
-class ObjectManager;
+class Object;
 
 class Transform {
-  friend class Engine;
   friend class ObjectManager;
+  friend class Object;
 
   public:
     Transform() = default;
@@ -39,13 +37,13 @@ class Transform {
     void set_scale(const vec3&);
 
   private:
+    Object * m_object = nullptr;
+    unsigned int m_index = 0;
+
     vec3 m_position = vec3(0.0f);
     vec3 m_rotation = vec3(0.0f);
     vec3 m_scale = vec3(1.0f);
     double m_time = 0.0;
-
-    ObjectManager * m_manager = nullptr;
-    std::pair<std::string, unsigned int> m_location;
 };
 
 } // namespace ge

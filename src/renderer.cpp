@@ -265,7 +265,7 @@ void Renderer::draw(const Engine& engine) {
   };
 
   unsigned int materialIndex = 0;
-  for (const auto& [material, pipeline, layout, descriptorSet] : engine.m_materials) {
+  for (const auto& [material, pipeline, layout, sets] : engine.m_materials) {
     if (!engine.m_objects.hasObjects(material)) continue;
 
     m_renderCmds[m_frameIndex].bindPipeline(vk::PipelineBindPoint::eGraphics, pipeline);
@@ -274,7 +274,7 @@ void Renderer::draw(const Engine& engine) {
       vk::PipelineBindPoint::eGraphics,
       *layout,
       0,
-      *descriptorSet,
+      *sets[m_frameIndex],
       nullptr
     );
 
@@ -282,7 +282,7 @@ void Renderer::draw(const Engine& engine) {
 
     m_renderCmds[m_frameIndex].pushConstants(
       *layout,
-      all_stages,
+      vk::ShaderStageFlagBits::eAll,
       0,
       vk::ArrayProxy<const char>(sizeof(EngineData), reinterpret_cast<const char *>(&engineData))
     );
@@ -290,7 +290,7 @@ void Renderer::draw(const Engine& engine) {
     m_renderCmds[m_frameIndex].bindVertexBuffers(0, *vertexBuffer, { 0 });
     m_renderCmds[m_frameIndex].bindIndexBuffer(indexBuffer, 0, vk::IndexType::eUint32);
 
-    m_renderCmds[m_frameIndex].drawIndexedIndirect(indirectBuffer, 0, commandCount, engine.m_objects.commandSize());
+    m_renderCmds[m_frameIndex].drawIndexedIndirect(indirectBuffer, 0, commandCount, sizeof(Object::Command));
   }
   m_renderCmds[m_frameIndex].endRendering();
 }

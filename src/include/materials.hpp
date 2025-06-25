@@ -6,7 +6,6 @@
 #include <vulkan/vulkan_beta.h>
 
 #include <map>
-#include <string>
 
 #define all_stages  vk::ShaderStageFlagBits::eVertex                  | \
                     vk::ShaderStageFlagBits::eGeometry                | \
@@ -18,6 +17,7 @@
 namespace ge {
 
 class Engine;
+class Material;
 
 enum ShaderStage {
   VertexShader = static_cast<unsigned int>(vk::ShaderStageFlagBits::eVertex),
@@ -34,14 +34,9 @@ struct EngineData {
 };
 
 class MaterialManager {
-  using ShaderStages = std::pair<
-    std::vector<vk::raii::ShaderModule>,
-    std::vector<vk::PipelineShaderStageCreateInfo>
-  >;
-
   public:
     class Builder {
-      friend class MaterialManager;
+      friend class Material;
 
       public:
         Builder() = default;
@@ -53,7 +48,7 @@ class MaterialManager {
         Builder& operator=(const Builder&) = default;
         Builder& operator=(Builder&&) = default;
 
-        Builder& add_shader(ShaderStage, std::string);
+        Builder& add_shader(ShaderStage, const std::string&);
 
       private:
         std::map<vk::ShaderStageFlagBits, std::string> m_shaders;
@@ -65,11 +60,11 @@ class MaterialManager {
         const std::string&,
         const vk::raii::Pipeline&,
         const vk::raii::PipelineLayout&,
-        const vk::raii::DescriptorSet&
+        const vk::raii::DescriptorSets&
       >;
 
       public:
-        Iterator(const MaterialManager *, const std::map<std::string, unsigned int>::const_iterator&);
+        Iterator(const MaterialManager *, const std::map<std::string, Material>::const_iterator&);
         Iterator(const Iterator&) = default;
         Iterator(Iterator&&) = default;
 
@@ -86,55 +81,79 @@ class MaterialManager {
 
       private:
         const MaterialManager * m_manager;
-        std::map<std::string, unsigned int>::const_iterator m_iterator;
+        std::map<std::string, Material>::const_iterator m_iterator;
     };
 
   public:
     MaterialManager() = default;
-    MaterialManager(MaterialManager&) = delete;
+    MaterialManager(const MaterialManager&) = delete;
     MaterialManager(MaterialManager&&) = delete;
 
     ~MaterialManager() = default;
 
-    MaterialManager& operator=(MaterialManager&) = delete;
+    MaterialManager& operator=(const MaterialManager&) = delete;
     MaterialManager& operator=(MaterialManager&&) = delete;
 
     Iterator begin() const;
     Iterator end() const;
 
-    bool exists(std::string) const;
+    bool exists(const std::string&) const;
 
     void add(const std::string&, const Builder&);
-    void add(const std::string&, Builder&&);
     void load(const Engine&, const std::map<std::string, std::vector<mat4>>&);
-    void updateTransforms(const std::map<std::string, std::vector<mat4>>&);
-    void updateFrameIndex(const Engine&);
+    void updateTransforms(unsigned int, const std::map<std::string, std::vector<mat4>>&);
 
   private:
-    ShaderStages getShaderStages(const Engine&, const Builder&) const;
+    std::map<std::string, Builder> m_builders;
+    std::map<std::string, Material> m_materials;
+};
+
+class Material {
+  using ShaderStages = std::pair<
+    std::vector<vk::raii::ShaderModule>,
+    std::vector<vk::PipelineShaderStageCreateInfo>
+  >;
+
+  using Output = std::tuple<
+    const vk::raii::Pipeline&,
+    const vk::raii::PipelineLayout&,
+    const vk::raii::DescriptorSets&
+  >;
+
+  public:
+    Material(const Engine&, const MaterialManager::Builder&, const std::vector<mat4>&);
+    Material(const Material&) = delete;
+    Material(Material&&) = default;
+
+    ~Material() = default;
+
+    Material& operator=(const Material&) = delete;
+    Material& operator=(Material&&) = default;
+
+    Output operator*() const;
+
+    void updateTransforms(unsigned int, const std::vector<mat4>&);
+
+  private:
+    ShaderStages getShaderStages(const Engine&, const MaterialManager::Builder&) const;
 
     void createLayout(const Engine&);
-    void createPipeline(const Engine&, const Builder&);
-    void createDescriptors(const Engine&, const std::map<std::string, std::vector<mat4>>&);
-    void updateSets(const Engine&);
-    void updateTransforms(const std::vector<mat4>&, unsigned int);
+    void createPipeline(const Engine&, const MaterialManager::Builder&);
+    void createDescriptors(const Engine&, const std::vector<mat4>&);
+    void createSets(const Engine&);
 
   private:
-    std::map<std::string, unsigned int> m_materials;
-    std::vector<Builder> m_builders;
-    unsigned int m_frameIndex = 0;
+    vk::raii::PipelineLayout m_layout = nullptr;
+    vk::raii::Pipeline m_pipeline = nullptr;
 
-    std::vector<vk::raii::DescriptorSetLayout> m_setLayouts;
-    std::vector<vk::raii::PipelineLayout> m_layouts;
-    std::vector<vk::raii::Pipeline> m_pipelines;
-
-    vk::raii::DescriptorPool m_setPool = nullptr;
+    vk::raii::DescriptorSetLayout m_setLayout = nullptr;
+    vk::raii::DescriptorPool m_pool = nullptr;
     vk::raii::DescriptorSets m_sets = nullptr;
 
-    vk::raii::DeviceMemory m_transformMemory = nullptr;
-    std::vector<vk::raii::Buffer> m_transformBuffers;
-    std::vector<unsigned int> m_transformOffsets;
-    void * m_transformMap = nullptr;
+    vk::raii::DeviceMemory m_memory = nullptr;
+    std::vector<vk::raii::Buffer> m_buffers;
+    std::vector<unsigned int> m_offsets;
+    void * m_map = nullptr;
 };
 
 } // namespace ge
