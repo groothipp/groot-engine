@@ -35,6 +35,16 @@ class Allocator {
     vk::raii::DescriptorSets
   >;
 
+  using ImageOutput = std::tuple<
+    vk::raii::DeviceMemory,
+    std::vector<vk::raii::Image>,
+    std::vector<vk::raii::ImageView>,
+    std::vector<unsigned int>,
+    unsigned int
+  >;
+
+  using SamplerOutput = vk::raii::Sampler;
+
   public:
     Allocator() = delete;
     Allocator(Allocator&) = delete;
@@ -52,10 +62,11 @@ class Allocator {
     static SemaphoreOutput semaphores(const Engine&, unsigned int);
     static DescriptorOutput descriptorPool(const Engine&, const vk::raii::DescriptorSetLayout&,
       unsigned int storageCount,
-      unsigned int uniformCount,
       unsigned int imageCount,
       unsigned int samplerCount
     );
+    static ImageOutput imagePool(const Engine&, const std::vector<std::pair<unsigned int, unsigned int>>&);
+    static SamplerOutput sampler(const Engine&);
 
   private:
     static vk::raii::DeviceMemory allocate(

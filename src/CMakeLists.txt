@@ -2,6 +2,7 @@ project(GrootEngine::Library)
 
 find_package(Vulkan REQUIRED)
 find_package(glfw3 REQUIRED)
+find_package(PNG REQUIRED)
 
 set(GROOT_INCLUDES
   ${CMAKE_CURRENT_SOURCE_DIR}/include/allocator.hpp
@@ -57,4 +58,5 @@ target_compile_definitions(groot PRIVATE
 target_link_libraries(groot PRIVATE
   Vulkan::Vulkan
   glfw
+  PNG::PNG
 )

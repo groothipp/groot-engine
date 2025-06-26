@@ -13,15 +13,15 @@ class ObjParser {
 
   public:
     ObjParser() = delete;
-    ObjParser(ObjParser&) = delete;
+    ObjParser(const ObjParser&) = delete;
     ObjParser(ObjParser&&) = delete;
 
     ~ObjParser() = default;
 
-    ObjParser& operator = (ObjParser&) = delete;
-    ObjParser& operator = (ObjParser&&) = delete;
+    ObjParser& operator=(const ObjParser&) = delete;
+    ObjParser& operator=(ObjParser&&) = delete;
 
-    static Output parse(std::string);
+    static Output parse(const std::string&);
 };
 
 class SPVParser {
@@ -29,15 +29,36 @@ class SPVParser {
 
   public:
     SPVParser() = delete;
-    SPVParser(SPVParser&) = delete;
+    SPVParser(const SPVParser&) = delete;
     SPVParser(SPVParser&&) = delete;
 
     ~SPVParser() = default;
 
-    SPVParser& operator = (SPVParser&) = delete;
-    SPVParser& operator = (SPVParser&&) = delete;
+    SPVParser& operator=(const SPVParser&) = delete;
+    SPVParser& operator=(SPVParser&&) = delete;
 
-    static Output parse(std::string);
+    static Output parse(const std::string&);
+};
+
+class PNGParser {
+  using Output = std::tuple<
+    unsigned int,
+    unsigned int,
+    unsigned int,
+    std::vector<char>
+  >;
+
+  public:
+    PNGParser() = delete;
+    PNGParser(const PNGParser&) = delete;
+    PNGParser(PNGParser&&) = delete;
+
+    ~PNGParser() = default;
+
+    PNGParser& operator=(const PNGParser&) = delete;
+    PNGParser& operator=(PNGParser&&) = delete;
+
+    static Output parse(const std::string&);
 };
 
 } // namespace ge

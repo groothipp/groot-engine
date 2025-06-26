@@ -12,11 +12,11 @@ TEST_CASE( "engine", "[unit][engine]" ) {
   ge::Engine engine;
 
   SECTION( "add_duplicate_material" ) {
-    engine.add_material("test", ge::MaterialManager::Builder());
+    engine.add_material("test", ge::MaterialManager::Builder().add_texture("../tests/dat/test_image.png"));
 
     bool caught = false;
     try {
-      engine.add_material("test", ge::MaterialManager::Builder());
+      engine.add_material("test", ge::MaterialManager::Builder().add_texture("../tests/dat/test_image.png"));
     }
     catch (const std::runtime_error& e) {
       caught = true;
@@ -62,9 +62,16 @@ TEST_CASE( "engine", "[unit][engine]" ) {
 
     engine.add_material("test3", ge::MaterialManager::Builder()
       .add_shader(ge::ShaderStage::VertexShader, "shaders/shader.vert.spv")
-      .add_shader(ge::ShaderStage::FragmentShader, "shaders/shader.frag.spv")
+      .add_shader(ge::ShaderStage::FragmentShader, "shaders/shader3.frag.spv")
       .add_mutable(&buffer3)
       .add_immutable(sizeof(ge::vec3), &tint3)
+      .add_texture("../tests/dat/test_image.png")
+    );
+
+    engine.add_material("test4", ge::MaterialManager::Builder()
+      .add_shader(ge::ShaderStage::VertexShader, "shaders/shader.vert.spv")
+      .add_shader(ge::ShaderStage::FragmentShader, "shaders/shader2.frag.spv")
+      .add_texture("../tests/dat/test_image.png")
     );
 
     ge::transform obj1 = engine.add_object("test", "../tests/dat/circle.obj",
@@ -89,6 +96,10 @@ TEST_CASE( "engine", "[unit][engine]" ) {
 
     ge::transform obj6 = engine.add_object("test3", "../tests/dat/pentagon.obj",
       ge::Transform(ge::vec3(0.0f, -0.75f, -0.15f), ge::vec3(0.0f), ge::vec3(0.23f))
+    );
+
+    ge::transform obj7 = engine.add_object("test4", "../tests/dat/quad.obj",
+      ge::Transform(ge::vec3(0.0f, 0.0f, 1.0f), ge::vec3(0.0f), ge::vec3(1.5f))
     );
 
     std::tuple<

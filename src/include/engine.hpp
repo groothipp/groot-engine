@@ -62,8 +62,7 @@ class Engine {
     Engine& operator = (Engine&) = delete;
     Engine& operator = (Engine&&) = delete;
 
-    void add_material(std::string, const MaterialManager::Builder&);
-    void add_material(std::string, MaterialManager::Builder&&);
+    void add_material(std::string, MaterialManager::Builder&);
     transform add_object(std::string, std::string, const Transform& t = Transform());
     void run();
 

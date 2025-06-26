@@ -38,6 +38,7 @@ class MaterialManager {
   public:
     class Builder {
       friend class Material;
+      friend class MaterialManager;
 
       public:
         Builder() = default;
@@ -52,13 +53,15 @@ class MaterialManager {
         Builder& add_shader(ShaderStage, const std::string&);
         Builder& add_mutable(BufferProxy *);
         Builder& add_immutable(unsigned int, void *);
-        // Builder& add_texture();
+        Builder& add_texture(const std::string&);
         // Builder& add_canvas();
 
       private:
         std::map<vk::ShaderStageFlagBits, std::string> m_shaders;
         std::vector<BufferProxy *> m_mutables;
         std::vector<std::pair<unsigned int, void *>> m_immutables;
+        std::vector<std::string> m_texturePaths;
+        std::vector<std::tuple<unsigned int, unsigned int, unsigned int, std::vector<char>>> m_textures;
     };
 
   private:
@@ -106,13 +109,14 @@ class MaterialManager {
 
     bool exists(const std::string&) const;
 
-    void add(const std::string&, const Builder&);
+    void add(const std::string&, Builder&);
     void load(const Engine&, const std::map<std::string, std::vector<mat4>>&);
     void update(unsigned int, const std::map<std::string, std::vector<mat4>>&);
 
   private:
     std::map<std::string, Builder> m_builders;
     std::map<std::string, Material> m_materials;
+    std::map<std::string, std::tuple<unsigned int, unsigned int, unsigned int, std::vector<char>>> m_textureMap;
 };
 
 class Material {
@@ -173,6 +177,12 @@ class Material {
 
     vk::raii::DeviceMemory m_immutableMemory = nullptr;
     std::vector<vk::raii::Buffer> m_immutableBuffers;
+
+    vk::raii::Sampler m_sampler = nullptr;
+
+    vk::raii::DeviceMemory m_textureMemory = nullptr;
+    std::vector<vk::raii::Image> m_textures;
+    std::vector<vk::raii::ImageView> m_textureViews;
 };
 
 } // namespace ge

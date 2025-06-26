@@ -3,7 +3,8 @@
 #include "src/include/engine.hpp"
 #include "src/include/materials.hpp"
 #include "src/include/parsers.hpp"
-#include "vulkan/vulkan_enums.hpp"
+
+#include <iostream>
 
 namespace ge {
 
@@ -19,6 +20,11 @@ MaterialManager::Builder& MaterialManager::Builder::add_mutable(BufferProxy * bu
 
 MaterialManager::Builder& MaterialManager::Builder::add_immutable(unsigned int size, void * data) {
   m_immutables.emplace_back(std::make_pair(size, data));
+  return *this;
+}
+
+MaterialManager::Builder& MaterialManager::Builder::add_texture(const std::string& path) {
+  m_texturePaths.emplace_back(path);
   return *this;
 }
 
@@ -54,7 +60,16 @@ bool MaterialManager::exists(const std::string& tag) const {
   return m_materials.contains(tag);
 }
 
-void MaterialManager::add(const std::string& tag, const Builder& builder) {
+void MaterialManager::add(const std::string& tag, Builder& builder) {
+  if (m_materials.contains(tag))
+    throw std::runtime_error("groot-engine: tried to add material with tag that already exists");
+
+  for (const auto& path : builder.m_texturePaths) {
+    if (!m_textureMap.contains(path))
+      m_textureMap.emplace(path, PNGParser::parse(path));
+    builder.m_textures.emplace_back(m_textureMap.at(path));
+  }
+
   m_builders[tag] = builder;
   m_materials[tag] = Material();
 }
@@ -62,6 +77,8 @@ void MaterialManager::add(const std::string& tag, const Builder& builder) {
 void MaterialManager::load(const Engine& engine, const std::map<std::string, std::vector<mat4>>& transforms) {
   for (const auto& [material, matrices] : transforms)
     m_materials.at(material).load(engine, m_builders.at(material), matrices);
+  m_builders.clear();
+  m_textureMap.clear();
 }
 
 void MaterialManager::update(unsigned int frameIndex, const std::map<std::string, std::vector<mat4>>& transforms) {
@@ -77,6 +94,7 @@ Material::Output Material::operator*() const {
 }
 
 void Material::load(const Engine& engine, const MaterialManager::Builder& builder, const std::vector<mat4>& matrices) {
+  std::cout << "loading material\n";
   createLayout(engine, builder);
   createPipeline(engine, builder);
   createDescriptors(engine, matrices, builder);
@@ -130,6 +148,16 @@ void Material::createLayout(const Engine& engine, const MaterialManager::Builder
   }};
 
   unsigned int binding = 1;
+  if (!builder.m_textures.empty()) {
+    bindings.emplace_back(vk::DescriptorSetLayoutBinding{
+      .binding          = 1,
+      .descriptorType   = vk::DescriptorType::eCombinedImageSampler,
+      .descriptorCount  = static_cast<unsigned int>(builder.m_textures.size()),
+      .stageFlags       = vk::ShaderStageFlagBits::eFragment
+    });
+    binding = 2;
+  }
+
   for (const auto& immutable : builder.m_immutables) {
     bindings.emplace_back(vk::DescriptorSetLayoutBinding{
       .binding          = binding++,
@@ -269,6 +297,8 @@ void Material::createDescriptors(const Engine& engine, const std::vector<mat4>& 
   std::vector<vk::BufferCreateInfo> mutableInfos;
   std::vector<vk::BufferCreateInfo> immutableTransferInfos;
   std::vector<vk::BufferCreateInfo> immutableInfos;
+  std::vector<vk::BufferCreateInfo> imageTransferInfos;
+  std::vector<std::pair<unsigned int, unsigned int>> imageInfos;
 
   for (unsigned int i = 0; i < engine.m_settings.buffer_mode; ++i) {
     transformInfos.emplace_back(vk::BufferCreateInfo{
@@ -297,6 +327,15 @@ void Material::createDescriptors(const Engine& engine, const std::vector<mat4>& 
     });
   }
 
+  for (const auto& [width, height, size, data] : builder.m_textures) {
+    imageTransferInfos.emplace_back(vk::BufferCreateInfo{
+      .size   = size,
+      .usage  = vk::BufferUsageFlagBits::eTransferSrc
+    });
+
+    imageInfos.emplace_back(std::make_pair(width, height));
+  }
+
   auto [tmp_transformMem, tmp_transformBufs, tmp_transformOffs, transformSize] = Allocator::bufferPool(engine, transformInfos,
     vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent
   );
@@ -306,13 +345,17 @@ void Material::createDescriptors(const Engine& engine, const std::vector<mat4>& 
 
   m_transformMap = m_transformMemory.mapMemory(0, transformSize);
 
-  auto [tmp_mutableMem, tmp_mutableBufs, mutableOffs, mutableSize] = Allocator::bufferPool(engine, mutableInfos,
-    vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent
-  );
-  m_mutableMemory = std::move(tmp_mutableMem);
-  m_mutableBuffers = std::move(tmp_mutableBufs);
+  std::vector<unsigned int> mutableOffs;
+  if (!mutableInfos.empty()) {
+    auto [tmp_mutableMem, tmp_mutableBufs, tmp_mutableOffs, mutableSize] = Allocator::bufferPool(engine, mutableInfos,
+      vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent
+    );
+    m_mutableMemory = std::move(tmp_mutableMem);
+    m_mutableBuffers = std::move(tmp_mutableBufs);
+    mutableOffs = std::move(tmp_mutableOffs);
 
-  m_mutableMap = m_mutableMemory.mapMemory(0, mutableSize);
+    m_mutableMap = m_mutableMemory.mapMemory(0, mutableSize);
+  }
 
   for (unsigned int i = 0; i < engine.m_settings.buffer_mode; ++i) {
     updateTransforms(i, matrices);
@@ -325,22 +368,49 @@ void Material::createDescriptors(const Engine& engine, const std::vector<mat4>& 
     }
   }
 
-  auto [immutableTMem, immutableTBufs, immutableTOffs, immutableTSize] = Allocator::bufferPool(engine, immutableTransferInfos,
-    vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent
-  );
+  vk::raii::DeviceMemory immutableTMem = nullptr;
+  std::vector<vk::raii::Buffer> immutableTBufs;
+  if (!immutableInfos.empty()) {
+    auto [tmp_immutableTMem, tmp_immutableTBufs, immutableTOffs, immutableTSize] = Allocator::bufferPool(engine, immutableTransferInfos,
+      vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent
+    );
+    immutableTMem = std::move(tmp_immutableTMem);
+    immutableTBufs = std::move(tmp_immutableTBufs);
 
-  void * immutableTMap = immutableTMem.mapMemory(0, immutableTSize);
-  for (unsigned int i = 0; i < immutableTOffs.size(); ++i) {
-    auto& [size, data] = builder.m_immutables[i];
-    memcpy(reinterpret_cast<char *>(immutableTMap) + immutableTOffs[i], data, size);
+    void * immutableTMap = immutableTMem.mapMemory(0, immutableTSize);
+    for (unsigned int i = 0; i < immutableTOffs.size(); ++i) {
+      auto& [size, data] = builder.m_immutables[i];
+      memcpy(reinterpret_cast<char *>(immutableTMap) + immutableTOffs[i], data, size);
+    }
+    immutableTMem.unmapMemory();
+
+    auto [tmp_immutableMem, tmp_immutableBufs, immutableOffs, immutableSize] = Allocator::bufferPool(engine, immutableInfos,
+      vk::MemoryPropertyFlagBits::eDeviceLocal
+    );
+    m_immutableMemory = std::move(tmp_immutableMem);
+    m_immutableBuffers = std::move(tmp_immutableBufs);
   }
-  immutableTMem.unmapMemory();
 
-  auto [tmp_immutableMem, tmp_immutableBufs, immutableOffs, immutableSize] = Allocator::bufferPool(engine, immutableInfos,
-    vk::MemoryPropertyFlagBits::eDeviceLocal
-  );
-  m_immutableMemory = std::move(tmp_immutableMem);
-  m_immutableBuffers = std::move(tmp_immutableBufs);
+  vk::raii::DeviceMemory imageTMem = nullptr;
+  std::vector<vk::raii::Buffer> imageTBufs;
+  if (!imageTransferInfos.empty()) {
+    auto [tmp_imageTMem, tmp_imageTBufs, imageTOffs, imageTSize] = Allocator::bufferPool(engine, imageTransferInfos,
+      vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent
+    );
+    imageTMem = std::move(tmp_imageTMem);
+    imageTBufs = std::move(tmp_imageTBufs);
+
+    void * imageTMap = imageTMem.mapMemory(0, imageTSize);
+    unsigned int i = 0;
+    for (auto& [width, height, size, data] : builder.m_textures)
+      memcpy(reinterpret_cast<char *>(imageTMap) + imageTOffs[i++], data.data(), size);
+    imageTMem.unmapMemory();
+
+    auto [tmp_imageMem, tmp_images, tmp_views, imageOffs, imageSize] = Allocator::imagePool(engine, imageInfos);
+    m_textureMemory = std::move(tmp_imageMem);
+    m_textures = std::move(tmp_images);
+    m_textureViews = std::move(tmp_views);
+  }
 
   vk::raii::CommandBuffer transferCmd = std::move(engine.getCmds(QueueFamilyType::Transfer, 1)[0]);
   transferCmd.begin({ .flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit });
@@ -348,6 +418,56 @@ void Material::createDescriptors(const Engine& engine, const std::vector<mat4>& 
   for (unsigned int i = 0; i < m_immutableBuffers.size(); ++i) {
     auto& [size, data] = builder.m_immutables[i];
     transferCmd.copyBuffer(immutableTBufs[i], m_immutableBuffers[i], vk::BufferCopy{ .size = size });
+  }
+
+  for (unsigned int i = 0; i < m_textures.size(); ++i) {
+    auto& [width, height, size, data] = builder.m_textures[i];
+
+    vk::ImageMemoryBarrier barrier{
+      .dstAccessMask    = vk::AccessFlagBits::eTransferWrite,
+      .newLayout        = vk::ImageLayout::eTransferDstOptimal,
+      .image            = m_textures[i],
+      .subresourceRange = {
+        .aspectMask = vk::ImageAspectFlagBits::eColor,
+        .levelCount = 1,
+        .layerCount = 1
+      }
+    };
+
+    transferCmd.pipelineBarrier(
+      vk::PipelineStageFlagBits::eTopOfPipe,
+      vk::PipelineStageFlagBits::eTransfer,
+      vk::DependencyFlags(),
+      nullptr,
+      nullptr,
+      barrier
+    );
+
+    transferCmd.copyBufferToImage(imageTBufs[i], m_textures[i], vk::ImageLayout::eTransferDstOptimal, vk::BufferImageCopy{
+      .imageSubresource = {
+        .aspectMask = vk::ImageAspectFlagBits::eColor,
+        .layerCount = 1
+      },
+      .imageExtent = {
+        .width  = width,
+        .height = height,
+        .depth  = 1
+      }
+    });
+
+    barrier.srcAccessMask = vk::AccessFlagBits::eTransferWrite;
+    barrier.dstAccessMask = vk::AccessFlagBits::eShaderRead;
+    barrier.oldLayout = vk::ImageLayout::eTransferDstOptimal;
+    barrier.newLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
+
+    transferCmd.pipelineBarrier(
+      vk::PipelineStageFlagBits::eTransfer,
+      vk::PipelineStageFlagBits::eFragmentShader,
+      vk::DependencyFlags(),
+      nullptr,
+      nullptr,
+      barrier
+    );
   }
 
   transferCmd.end();
@@ -367,11 +487,12 @@ void Material::createSets(const Engine& engine, const MaterialManager::Builder& 
   unsigned int storageCount =
     engine.m_settings.buffer_mode * (1 + builder.m_mutables.size() + builder.m_immutables.size());
 
+  unsigned int samplerCount = engine.m_settings.buffer_mode * builder.m_textures.size();
+
   auto [tmp_pool, tmp_sets] = Allocator::descriptorPool(engine, m_setLayout,
     storageCount,
     0,
-    0,
-    0
+    samplerCount
   );
   m_pool = std::move(tmp_pool);
   m_sets = std::move(tmp_sets);
@@ -379,8 +500,15 @@ void Material::createSets(const Engine& engine, const MaterialManager::Builder& 
   std::vector<vk::DescriptorBufferInfo> bufferInfos;
   bufferInfos.reserve(storageCount);
 
+  std::vector<std::vector<vk::DescriptorImageInfo>> imageInfos;
+  imageInfos.resize(engine.m_settings.buffer_mode);
+  for (auto& infoSet : imageInfos)
+    infoSet.reserve(builder.m_textures.size());
+
   std::vector<vk::WriteDescriptorSet> writes;
-  writes.reserve(storageCount);
+  writes.reserve(storageCount + engine.m_settings.buffer_mode);
+
+  m_sampler = Allocator::sampler(engine);
 
   for (unsigned int i = 0; i < engine.m_settings.buffer_mode; ++i) {
     bufferInfos.emplace_back(vk::DescriptorBufferInfo{
@@ -398,6 +526,24 @@ void Material::createSets(const Engine& engine, const MaterialManager::Builder& 
     });
 
     unsigned int binding = 1;
+    for (auto& view : m_textureViews) {
+      imageInfos[i].emplace_back(vk::DescriptorImageInfo{
+        .sampler      = m_sampler,
+        .imageView    = view,
+        .imageLayout  = vk::ImageLayout::eShaderReadOnlyOptimal
+      });
+    }
+    if (!imageInfos[i].empty()) {
+      writes.emplace_back(vk::WriteDescriptorSet{
+        .dstSet           = m_sets[i],
+        .dstBinding       = 1,
+        .descriptorCount  = static_cast<unsigned int>(builder.m_textures.size()),
+        .descriptorType   = vk::DescriptorType::eCombinedImageSampler,
+        .pImageInfo       = imageInfos[i].data()
+      });
+      binding = 2;
+    }
+
     unsigned int j = 0;
     for (auto& immutable : builder.m_immutables) {
       bufferInfos.emplace_back(vk::DescriptorBufferInfo{

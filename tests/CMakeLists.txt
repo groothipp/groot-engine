@@ -16,6 +16,8 @@ set(TESTS_SOURCES
 set(TESTS_SHADERS
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/shader.frag
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/shader.vert
+  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/shader2.frag
+  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/shader3.frag
 )
 
 foreach(SHADER ${TESTS_SHADERS})

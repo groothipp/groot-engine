@@ -22,16 +22,10 @@ Engine::~Engine() {
   glfwTerminate();
 }
 
-void Engine::add_material(std::string tag, const MaterialManager::Builder& builder) {
+void Engine::add_material(std::string tag, MaterialManager::Builder& builder) {
   if (m_materials.exists(tag))
     throw std::runtime_error("groot-engine: material '" + tag + "' already exists");
   m_materials.add(tag, builder);
-}
-
-void Engine::add_material(std::string tag, MaterialManager::Builder&& builder) {
-  if (m_materials.exists(tag))
-    throw std::runtime_error("groot-engine: material '" + tag + "' already exists");
-  m_materials.add(tag, std::move(builder));
 }
 
 transform Engine::add_object(std::string material, std::string path, const Transform& transform) {

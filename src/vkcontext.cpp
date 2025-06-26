@@ -1,4 +1,5 @@
 #include "src/include/engine.hpp"
+#include "vulkan/vulkan_core.h"
 #include "src/include/vkcontext.hpp"
 
 #include <set>
@@ -40,7 +41,8 @@ void VulkanContext::initialize(const Engine& engine) {
   std::vector<const char *> extensions{
     VK_KHR_SWAPCHAIN_EXTENSION_NAME,
     VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME,
-    VK_KHR_SHADER_DRAW_PARAMETERS_EXTENSION_NAME
+    VK_KHR_SHADER_DRAW_PARAMETERS_EXTENSION_NAME,
+    VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME
   };
 
   chooseGPU(engine, extensions);

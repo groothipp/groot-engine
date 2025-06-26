@@ -1,5 +1,7 @@
 #include "src/include/allocator.hpp"
 #include "src/include/engine.hpp"
+#include "vulkan/vulkan_enums.hpp"
+#include "vulkan/vulkan_raii.hpp"
 
 namespace ge {
 
@@ -103,7 +105,6 @@ Allocator::SemaphoreOutput Allocator::semaphores(const Engine& engine, unsigned 
 Allocator::DescriptorOutput Allocator::descriptorPool(
   const Engine& engine, const vk::raii::DescriptorSetLayout& setLayout,
   unsigned int storageCount,
-  unsigned int uniformCount,
   unsigned int imageCount,
   unsigned int samplerCount
 ) {
@@ -113,13 +114,6 @@ Allocator::DescriptorOutput Allocator::descriptorPool(
     poolSizes.emplace_back(vk::DescriptorPoolSize{
       .type             = vk::DescriptorType::eStorageBuffer,
       .descriptorCount  = storageCount
-    });
-  }
-
-  if (uniformCount > 0) {
-    poolSizes.emplace_back(vk::DescriptorPoolSize{
-      .type             = vk::DescriptorType::eUniformBuffer,
-      .descriptorCount  = uniformCount
     });
   }
 
@@ -133,7 +127,7 @@ Allocator::DescriptorOutput Allocator::descriptorPool(
 
   if (samplerCount > 0) {
     poolSizes.emplace_back(vk::DescriptorPoolSize{
-      .type             = vk::DescriptorType::eSampledImage,
+      .type             = vk::DescriptorType::eCombinedImageSampler,
       .descriptorCount  = samplerCount
     });
   }
@@ -156,6 +150,76 @@ Allocator::DescriptorOutput Allocator::descriptorPool(
   });
 
   return { std::move(pool), std::move(sets) };
+}
+
+Allocator::ImageOutput Allocator::imagePool(
+  const Engine& engine, const std::vector<std::pair<unsigned int, unsigned int>>& imageInfos
+) {
+  std::vector<vk::raii::Image> images;
+  for (const auto& [width, height] : imageInfos) {
+    images.emplace_back(engine.m_context.device().createImage(vk::ImageCreateInfo{
+      .imageType  = vk::ImageType::e2D,
+      .format     = vk::Format::eR8G8B8A8Srgb,
+      .extent     = vk::Extent3D{
+        .width  = width,
+        .height = height,
+        .depth  = 1
+      },
+      .mipLevels    = 1,
+      .arrayLayers  = 1,
+      .samples      = vk::SampleCountFlagBits::e1,
+      .tiling       = vk::ImageTiling::eOptimal,
+      .usage        = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferDst
+    }));
+  }
+
+  std::vector<unsigned int> offsets;
+  unsigned int allocationSize = 0;
+  unsigned int filter = ~(0x0);
+  for (auto& image : images) {
+    vk::MemoryRequirements requirements = image.getMemoryRequirements();
+
+    while (allocationSize % requirements.alignment != 0)
+      ++allocationSize;
+    offsets.emplace_back(allocationSize);
+
+    allocationSize += requirements.size;
+    filter &= requirements.memoryTypeBits;
+  }
+
+  vk::raii::DeviceMemory memory = allocate(engine, allocationSize, filter, vk::MemoryPropertyFlagBits::eDeviceLocal);
+
+  unsigned int i = 0;
+  for (auto& image : images)
+    image.bindMemory(memory, offsets[i++]);
+
+  std::vector<vk::raii::ImageView> views;
+  for (auto& image : images) {
+    views.emplace_back(engine.m_context.device().createImageView(vk::ImageViewCreateInfo{
+      .image            = image,
+      .viewType         = vk::ImageViewType::e2D,
+      .format           = vk::Format::eR8G8B8A8Srgb,
+      .subresourceRange = {
+        .aspectMask = vk::ImageAspectFlagBits::eColor,
+        .levelCount = 1,
+        .layerCount = 1
+      }
+    }));
+  }
+
+  return { std::move(memory), std::move(images), std::move(views), std::move(offsets), std::move(allocationSize) };
+}
+
+Allocator::SamplerOutput Allocator::sampler(const Engine& engine) {
+  return engine.m_context.device().createSampler(vk::SamplerCreateInfo{
+    .magFilter        = vk::Filter::eLinear,
+    .minFilter        = vk::Filter::eLinear,
+    .addressModeU     = vk::SamplerAddressMode::eRepeat,
+    .addressModeV     = vk::SamplerAddressMode::eRepeat,
+    .addressModeW     = vk::SamplerAddressMode::eRepeat,
+    .anisotropyEnable = true,
+    .maxAnisotropy    = engine.m_context.gpu().getProperties().limits.maxSamplerAnisotropy
+  });
 }
 
 vk::raii::DeviceMemory Allocator::allocate(
