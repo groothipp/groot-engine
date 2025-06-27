@@ -71,7 +71,10 @@ TEST_CASE( "engine", "[unit][engine]" ) {
     engine.add_material("test4", ge::MaterialManager::Builder()
       .add_shader(ge::ShaderStage::VertexShader, "shaders/shader.vert.spv")
       .add_shader(ge::ShaderStage::FragmentShader, "shaders/shader2.frag.spv")
+      .add_shader(ge::ShaderStage::ComputeShader, "shaders/shader.comp.spv")
       .add_texture("../tests/dat/test_image.png")
+      .add_canvas()
+      .compute_space(8, 8)
     );
 
     ge::transform obj1 = engine.add_object("test", "../tests/dat/circle.obj",

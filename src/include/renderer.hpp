@@ -35,7 +35,7 @@ class Renderer {
     void createSwapchain(const Engine&, const unsigned int&, const vk::SurfaceTransformFlagBitsKHR&);
     void createViews(const Engine&);
     void createSyncObjects(const Engine&);
-    void transitionImages(const unsigned int&);
+    void transitionImages(const Engine&, const unsigned int&);
     void preDraw(const Engine&, const unsigned int&);
     void draw(const Engine&);
     void endRendering();
@@ -54,10 +54,13 @@ class Renderer {
     vk::raii::ImageView m_depthView = nullptr;
 
     vk::raii::CommandBuffers m_renderCmds = nullptr;
+    vk::raii::CommandBuffers m_computeCmds = nullptr;
 
     std::vector<vk::raii::Fence> m_flightFences;
+    std::vector<vk::raii::Fence> m_computeFences;
     std::vector<vk::raii::Semaphore> m_renderSemaphores;
     std::vector<vk::raii::Semaphore> m_imageSemaphores;
+    std::vector<vk::raii::Semaphore> m_computeSemaphores;
 };
 
 } // namespace ge

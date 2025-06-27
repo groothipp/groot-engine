@@ -3,8 +3,8 @@
 #include "src/include/engine.hpp"
 #include "src/include/materials.hpp"
 #include "src/include/parsers.hpp"
-
-#include <iostream>
+#include "vulkan/vulkan_enums.hpp"
+#include "vulkan/vulkan_raii.hpp"
 
 namespace ge {
 
@@ -28,6 +28,16 @@ MaterialManager::Builder& MaterialManager::Builder::add_texture(const std::strin
   return *this;
 }
 
+MaterialManager::Builder& MaterialManager::Builder::add_canvas() {
+  ++m_canvasCount;
+  return *this;
+}
+
+MaterialManager::Builder& MaterialManager::Builder::compute_space(unsigned int x, unsigned int y) {
+  m_computeSpace = { x, y };
+  return *this;
+}
+
 MaterialManager::Iterator::Iterator(
   const MaterialManager * m, const std::map<std::string, Material>::const_iterator& itr
 ) : m_manager(m), m_iterator(itr)
@@ -38,9 +48,9 @@ bool MaterialManager::Iterator::operator!=(const Iterator& rhs) const {
 }
 
 MaterialManager::Iterator::Output MaterialManager::Iterator::operator*() const {
-  const auto& [pipeline, layout, sets] = *m_iterator->second;
+  const auto& [pipeline, compute, layout, sets, x, y] = *m_iterator->second;
 
-  return { m_iterator->first, pipeline, layout, sets };
+  return { m_iterator->first, pipeline, compute, layout, sets, x, y };
 }
 
 MaterialManager::Iterator& MaterialManager::Iterator::operator++() {
@@ -58,6 +68,11 @@ MaterialManager::Iterator MaterialManager::end() const {
 
 bool MaterialManager::exists(const std::string& tag) const {
   return m_materials.contains(tag);
+}
+
+void MaterialManager::transitionImages(vk::raii::CommandBuffer& computeCmd, vk::raii::CommandBuffer& renderCmd) const {
+  for (auto& [tag, material] : m_materials)
+    material.transitionImages(computeCmd, renderCmd);
 }
 
 void MaterialManager::add(const std::string& tag, Builder& builder) {
@@ -90,12 +105,85 @@ void MaterialManager::update(unsigned int frameIndex, const std::map<std::string
 }
 
 Material::Output Material::operator*() const {
-  return { m_pipeline, m_layout, m_sets };
+  return { m_pipeline, m_compute, m_layout, m_sets, m_computeSpace.first, m_computeSpace.second };
 }
 
-void Material::load(const Engine& engine, const MaterialManager::Builder& builder, const std::vector<mat4>& matrices) {
-  std::cout << "loading material\n";
+void Material::transitionImages(vk::raii::CommandBuffer& computeCmd, vk::raii::CommandBuffer& renderCmd) const {
+  if (m_canvases.empty()) return;
+
+  std::vector<vk::ImageMemoryBarrier> computeBarriers;
+  std::vector<vk::ImageMemoryBarrier> fragmentBarriers;
+
+  for (auto& image : m_canvases) {
+    computeBarriers.emplace_back(vk::ImageMemoryBarrier{
+      .dstAccessMask    = vk::AccessFlagBits::eShaderWrite,
+      .newLayout        = vk::ImageLayout::eGeneral,
+      .image            = image,
+      .subresourceRange = {
+        .aspectMask = vk::ImageAspectFlagBits::eColor,
+        .levelCount = 1,
+        .layerCount = 1
+      }
+    });
+
+    fragmentBarriers.emplace_back(vk::ImageMemoryBarrier{
+      .srcAccessMask    = vk::AccessFlagBits::eShaderWrite,
+      .dstAccessMask    = vk::AccessFlagBits::eShaderRead,
+      .oldLayout        = vk::ImageLayout::eGeneral,
+      .newLayout        = vk::ImageLayout::eShaderReadOnlyOptimal,
+      .image            = image,
+      .subresourceRange = {
+        .aspectMask = vk::ImageAspectFlagBits::eColor,
+        .levelCount = 1,
+        .layerCount = 1
+      }
+    });
+  }
+
+  computeCmd.pipelineBarrier(
+    vk::PipelineStageFlagBits::eTopOfPipe,
+    vk::PipelineStageFlagBits::eComputeShader,
+    vk::DependencyFlags(),
+    nullptr,
+    nullptr,
+    computeBarriers
+  );
+
+  renderCmd.pipelineBarrier(
+    vk::PipelineStageFlagBits::eComputeShader,
+    vk::PipelineStageFlagBits::eFragmentShader,
+    vk::DependencyFlags(),
+    nullptr,
+    nullptr,
+    fragmentBarriers
+  );
+}
+
+void Material::load(const Engine& engine, MaterialManager::Builder& builder, const std::vector<mat4>& matrices) {
   createLayout(engine, builder);
+  m_computeSpace = builder.m_computeSpace;
+
+  if (builder.m_shaders.contains(vk::ShaderStageFlagBits::eCompute)) {
+    auto code = SPVParser::parse(builder.m_shaders.at(vk::ShaderStageFlagBits::eCompute));
+    builder.m_shaders.erase(vk::ShaderStageFlagBits::eCompute);
+
+    vk::raii::ShaderModule computeModule = engine.m_context.device().createShaderModule(vk::ShaderModuleCreateInfo{
+      .codeSize = static_cast<unsigned int>(code.size()),
+      .pCode    = reinterpret_cast<unsigned int *>(code.data())
+    });
+
+    vk::PipelineShaderStageCreateInfo computeStage{
+      .stage  = vk::ShaderStageFlagBits::eCompute,
+      .module = computeModule,
+      .pName  = "main"
+    };
+
+    m_compute = engine.m_context.device().createComputePipeline(nullptr, vk::ComputePipelineCreateInfo{
+      .stage  = computeStage,
+      .layout = m_layout
+    });
+  }
+
   createPipeline(engine, builder);
   createDescriptors(engine, matrices, builder);
   createSets(engine, builder);
@@ -150,12 +238,27 @@ void Material::createLayout(const Engine& engine, const MaterialManager::Builder
   unsigned int binding = 1;
   if (!builder.m_textures.empty()) {
     bindings.emplace_back(vk::DescriptorSetLayoutBinding{
-      .binding          = 1,
+      .binding          = binding++,
       .descriptorType   = vk::DescriptorType::eCombinedImageSampler,
       .descriptorCount  = static_cast<unsigned int>(builder.m_textures.size()),
       .stageFlags       = vk::ShaderStageFlagBits::eFragment
     });
-    binding = 2;
+  }
+
+  if (builder.m_canvasCount != 0) {
+    bindings.emplace_back(vk::DescriptorSetLayoutBinding{
+      .binding          = binding++,
+      .descriptorType   = vk::DescriptorType::eStorageImage,
+      .descriptorCount  = builder.m_canvasCount,
+      .stageFlags       = vk::ShaderStageFlagBits::eCompute
+    });
+
+    bindings.emplace_back(vk::DescriptorSetLayoutBinding{
+      .binding          = binding++,
+      .descriptorType   = vk::DescriptorType::eCombinedImageSampler,
+      .descriptorCount  = builder.m_canvasCount,
+      .stageFlags       = vk::ShaderStageFlagBits::eFragment
+    });
   }
 
   for (const auto& immutable : builder.m_immutables) {
@@ -299,6 +402,7 @@ void Material::createDescriptors(const Engine& engine, const std::vector<mat4>& 
   std::vector<vk::BufferCreateInfo> immutableInfos;
   std::vector<vk::BufferCreateInfo> imageTransferInfos;
   std::vector<std::pair<unsigned int, unsigned int>> imageInfos;
+  std::vector<std::pair<unsigned int, unsigned int>> canvasInfos;
 
   for (unsigned int i = 0; i < engine.m_settings.buffer_mode; ++i) {
     transformInfos.emplace_back(vk::BufferCreateInfo{
@@ -334,6 +438,11 @@ void Material::createDescriptors(const Engine& engine, const std::vector<mat4>& 
     });
 
     imageInfos.emplace_back(std::make_pair(width, height));
+  }
+
+  for (unsigned int i = 0; i < builder.m_canvasCount; ++i) {
+    auto [x, y] = m_computeSpace;
+    canvasInfos.emplace_back(std::make_pair(8 * x, 8 * y));
   }
 
   auto [tmp_transformMem, tmp_transformBufs, tmp_transformOffs, transformSize] = Allocator::bufferPool(engine, transformInfos,
@@ -406,10 +515,21 @@ void Material::createDescriptors(const Engine& engine, const std::vector<mat4>& 
       memcpy(reinterpret_cast<char *>(imageTMap) + imageTOffs[i++], data.data(), size);
     imageTMem.unmapMemory();
 
-    auto [tmp_imageMem, tmp_images, tmp_views, imageOffs, imageSize] = Allocator::imagePool(engine, imageInfos);
+    auto [tmp_imageMem, tmp_images, tmp_views, imageOffs, imageSize] = Allocator::imagePool(engine, imageInfos,
+      vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferDst, vk::Format::eR8G8B8A8Srgb
+    );
     m_textureMemory = std::move(tmp_imageMem);
     m_textures = std::move(tmp_images);
     m_textureViews = std::move(tmp_views);
+  }
+
+  if (!canvasInfos.empty()) {
+    auto [tmp_canvasMem, tmp_canvasImgs, tmp_canvasViews, _, __] = Allocator::imagePool(engine, canvasInfos,
+      vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled, vk::Format::eR8G8B8A8Unorm
+    );
+    m_canvasMemory = std::move(tmp_canvasMem);
+    m_canvases = std::move(tmp_canvasImgs);
+    m_canvasViews = std::move(tmp_canvasViews);
   }
 
   vk::raii::CommandBuffer transferCmd = std::move(engine.getCmds(QueueFamilyType::Transfer, 1)[0]);
@@ -486,12 +606,12 @@ void Material::createDescriptors(const Engine& engine, const std::vector<mat4>& 
 void Material::createSets(const Engine& engine, const MaterialManager::Builder& builder) {
   unsigned int storageCount =
     engine.m_settings.buffer_mode * (1 + builder.m_mutables.size() + builder.m_immutables.size());
-
-  unsigned int samplerCount = engine.m_settings.buffer_mode * builder.m_textures.size();
+  unsigned int imageCount = engine.m_settings.buffer_mode * builder.m_canvasCount;
+  unsigned int samplerCount = engine.m_settings.buffer_mode * (builder.m_textures.size() + builder.m_canvasCount);
 
   auto [tmp_pool, tmp_sets] = Allocator::descriptorPool(engine, m_setLayout,
     storageCount,
-    0,
+    imageCount,
     samplerCount
   );
   m_pool = std::move(tmp_pool);
@@ -502,11 +622,21 @@ void Material::createSets(const Engine& engine, const MaterialManager::Builder& 
 
   std::vector<std::vector<vk::DescriptorImageInfo>> imageInfos;
   imageInfos.resize(engine.m_settings.buffer_mode);
-  for (auto& infoSet : imageInfos)
-    infoSet.reserve(builder.m_textures.size());
+
+  std::vector<std::vector<vk::DescriptorImageInfo>> canvasStorageInfos;
+  canvasStorageInfos.resize(engine.m_settings.buffer_mode);
+
+  std::vector<std::vector<vk::DescriptorImageInfo>> canvasSamplerInfos;
+  canvasSamplerInfos.resize(engine.m_settings.buffer_mode);
+
+  for (unsigned int i = 0; i < engine.m_settings.buffer_mode; ++i) {
+    imageInfos[i].reserve(builder.m_textures.size());
+    canvasStorageInfos[i].reserve(builder.m_canvasCount);
+    canvasStorageInfos[i].reserve(builder.m_canvasCount);
+  }
 
   std::vector<vk::WriteDescriptorSet> writes;
-  writes.reserve(storageCount + engine.m_settings.buffer_mode);
+  writes.reserve(storageCount + 3 * engine.m_settings.buffer_mode);
 
   m_sampler = Allocator::sampler(engine);
 
@@ -533,15 +663,45 @@ void Material::createSets(const Engine& engine, const MaterialManager::Builder& 
         .imageLayout  = vk::ImageLayout::eShaderReadOnlyOptimal
       });
     }
-    if (!imageInfos[i].empty()) {
+    if (!builder.m_textures.empty()) {
       writes.emplace_back(vk::WriteDescriptorSet{
         .dstSet           = m_sets[i],
-        .dstBinding       = 1,
+        .dstBinding       = binding++,
         .descriptorCount  = static_cast<unsigned int>(builder.m_textures.size()),
         .descriptorType   = vk::DescriptorType::eCombinedImageSampler,
         .pImageInfo       = imageInfos[i].data()
       });
-      binding = 2;
+    }
+
+    for (auto& view : m_canvasViews) {
+      canvasStorageInfos[i].emplace_back(vk::DescriptorImageInfo{
+        .sampler      = nullptr,
+        .imageView    = view,
+        .imageLayout  = vk::ImageLayout::eGeneral
+      });
+
+      canvasSamplerInfos[i].emplace_back(vk::DescriptorImageInfo{
+        .sampler      = m_sampler,
+        .imageView    = view,
+        .imageLayout  = vk::ImageLayout::eShaderReadOnlyOptimal
+      });
+    }
+    if (builder.m_canvasCount != 0) {
+      writes.emplace_back(vk::WriteDescriptorSet{
+        .dstSet           = m_sets[i],
+        .dstBinding       = binding++,
+        .descriptorCount  = builder.m_canvasCount,
+        .descriptorType   = vk::DescriptorType::eStorageImage,
+        .pImageInfo       = canvasStorageInfos[i].data()
+      });
+
+      writes.emplace_back(vk::WriteDescriptorSet{
+        .dstSet           = m_sets[i],
+        .dstBinding       = binding++,
+        .descriptorCount  = builder.m_canvasCount,
+        .descriptorType   = vk::DescriptorType::eCombinedImageSampler,
+        .pImageInfo       = canvasSamplerInfos[i].data()
+      });
     }
 
     unsigned int j = 0;

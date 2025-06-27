@@ -24,6 +24,7 @@ void Renderer::initialize(Engine& engine) {
   m_depthView = std::move(tmp_dView);
 
   m_renderCmds = engine.getCmds(QueueFamilyType::Main, engine.m_settings.buffer_mode);
+  m_computeCmds = engine.getCmds(QueueFamilyType::Compute, engine.m_settings.buffer_mode);
 
   createSyncObjects(engine);
 
@@ -32,35 +33,51 @@ void Renderer::initialize(Engine& engine) {
 }
 
 void Renderer::render(const Engine& engine) {
-  if (engine.m_context.device().waitForFences(*m_flightFences[m_frameIndex], true, ge_timeout) != vk::Result::eSuccess)
+  if (engine.m_context.device().waitForFences(
+    { *m_computeFences[m_frameIndex], *m_flightFences[m_frameIndex] }, true, ge_timeout
+  ) != vk::Result::eSuccess)
     throw std::runtime_error("groot-engine: hung waiting for flight fence");
 
   auto [res, imgIndex] = m_swapchain.acquireNextImage(ge_timeout, m_imageSemaphores[m_frameIndex], nullptr);
   if (res != vk::Result::eSuccess) throw std::runtime_error("groot-engine: failed to get next swapchain image");
 
-  engine.m_context.device().resetFences(*m_flightFences[m_frameIndex]);
+  engine.m_context.device().resetFences({ *m_computeFences[m_frameIndex], *m_flightFences[m_frameIndex] });
 
   m_renderCmds[m_frameIndex].reset();
-  m_renderCmds[m_frameIndex].begin({});
+  m_computeCmds[m_frameIndex].reset();
 
-  transitionImages(imgIndex);
+  m_renderCmds[m_frameIndex].begin({});
+  m_computeCmds[m_frameIndex].begin({});
+
+  transitionImages(engine, imgIndex);
   preDraw(engine, imgIndex);
   draw(engine);
 
   m_renderCmds[m_frameIndex].end();
+  m_computeCmds[m_frameIndex].end();
 
-  const vk::PipelineStageFlags waitStage =  vk::PipelineStageFlagBits::eColorAttachmentOutput;
-  vk::SubmitInfo renderSubmit{
-    .waitSemaphoreCount   = 1,
-    .pWaitSemaphores      = &*m_imageSemaphores[m_frameIndex],
-    .pWaitDstStageMask    = &waitStage,
+  engine.m_context.queueFamily(QueueFamilyType::Compute).queue.submit(vk::SubmitInfo{
+    .commandBufferCount   = 1,
+    .pCommandBuffers      = &*m_computeCmds[m_frameIndex],
+    .signalSemaphoreCount = 1,
+    .pSignalSemaphores    = &*m_computeSemaphores[m_frameIndex]
+  }, m_computeFences[m_frameIndex]);
+
+  const std::vector<vk::PipelineStageFlags> waitStages = {
+    vk::PipelineStageFlagBits::eComputeShader,
+    vk::PipelineStageFlagBits::eColorAttachmentOutput
+  };
+  std::array<vk::Semaphore, 2> waitSemaphores = { *m_computeSemaphores[m_frameIndex], *m_imageSemaphores[m_frameIndex] };
+
+  engine.m_context.queueFamily(QueueFamilyType::Main).queue.submit(vk::SubmitInfo{
+    .waitSemaphoreCount   = 2,
+    .pWaitSemaphores      = waitSemaphores.data(),
+    .pWaitDstStageMask    = waitStages.data(),
     .commandBufferCount   = 1,
     .pCommandBuffers      = &*m_renderCmds[m_frameIndex],
     .signalSemaphoreCount = 1,
     .pSignalSemaphores    = &*m_renderSemaphores[m_frameIndex]
-  };
-
-  engine.m_context.queueFamily(QueueFamilyType::Main).queue.submit(renderSubmit, m_flightFences[m_frameIndex]);
+  }, m_flightFences[m_frameIndex]);
 
   vk::PresentInfoKHR present{
     .waitSemaphoreCount = 1,
@@ -164,11 +181,13 @@ void Renderer::createViews(const Engine& engine) {
 
 void Renderer::createSyncObjects(const Engine& engine) {
   m_flightFences = Allocator::fences(engine, engine.m_settings.buffer_mode, true);
+  m_computeFences = Allocator::fences(engine, engine.m_settings.buffer_mode, true);
   m_imageSemaphores = Allocator::semaphores(engine, engine.m_settings.buffer_mode);
   m_renderSemaphores = Allocator::semaphores(engine, engine.m_settings.buffer_mode);
+  m_computeSemaphores = Allocator::semaphores(engine, engine.m_settings.buffer_mode);
 }
 
-void Renderer::transitionImages(const unsigned int& imgIndex) {
+void Renderer::transitionImages(const Engine& engine, const unsigned int& imgIndex) {
   vk::ImageMemoryBarrier barrier{
     .dstAccessMask    = vk::AccessFlagBits::eColorAttachmentWrite,
     .newLayout        = vk::ImageLayout::eColorAttachmentOptimal,
@@ -217,6 +236,8 @@ void Renderer::transitionImages(const unsigned int& imgIndex) {
     nullptr,
     barrier
   );
+
+  engine.m_materials.transitionImages(m_computeCmds[m_frameIndex], m_renderCmds[m_frameIndex]);
 }
 
 void Renderer::preDraw(const Engine& engine, const unsigned int& imgIndex) {
@@ -265,7 +286,7 @@ void Renderer::draw(const Engine& engine) {
   };
 
   unsigned int materialIndex = 0;
-  for (const auto& [material, pipeline, layout, sets] : engine.m_materials) {
+  for (const auto& [material, pipeline, compute, layout, sets, computeX, computeY] : engine.m_materials) {
     if (!engine.m_objects.hasObjects(material)) continue;
 
     m_renderCmds[m_frameIndex].bindPipeline(vk::PipelineBindPoint::eGraphics, pipeline);
@@ -291,6 +312,27 @@ void Renderer::draw(const Engine& engine) {
     m_renderCmds[m_frameIndex].bindIndexBuffer(indexBuffer, 0, vk::IndexType::eUint32);
 
     m_renderCmds[m_frameIndex].drawIndexedIndirect(indirectBuffer, 0, commandCount, sizeof(Object::Command));
+
+    if (*compute == nullptr) continue;
+
+    m_computeCmds[m_frameIndex].bindPipeline(vk::PipelineBindPoint::eCompute, compute);
+
+    m_computeCmds[m_frameIndex].bindDescriptorSets(
+      vk::PipelineBindPoint::eCompute,
+      *layout,
+      0,
+      *sets[m_frameIndex],
+      nullptr
+    );
+
+    m_computeCmds[m_frameIndex].pushConstants(
+      *layout,
+      vk::ShaderStageFlagBits::eAll,
+      0,
+      vk::ArrayProxy<const char>(sizeof(EngineData), reinterpret_cast<const char *>(&engineData))
+    );
+
+    m_computeCmds[m_frameIndex].dispatch(computeX, computeY, 1);
   }
   m_renderCmds[m_frameIndex].endRendering();
 }

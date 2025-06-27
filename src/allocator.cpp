@@ -153,13 +153,15 @@ Allocator::DescriptorOutput Allocator::descriptorPool(
 }
 
 Allocator::ImageOutput Allocator::imagePool(
-  const Engine& engine, const std::vector<std::pair<unsigned int, unsigned int>>& imageInfos
+  const Engine& engine, const std::vector<std::pair<unsigned int, unsigned int>>& imageInfos,
+  const vk::ImageUsageFlags& usage,
+  const vk::Format& format
 ) {
   std::vector<vk::raii::Image> images;
   for (const auto& [width, height] : imageInfos) {
     images.emplace_back(engine.m_context.device().createImage(vk::ImageCreateInfo{
       .imageType  = vk::ImageType::e2D,
-      .format     = vk::Format::eR8G8B8A8Srgb,
+      .format     = format,
       .extent     = vk::Extent3D{
         .width  = width,
         .height = height,
@@ -169,7 +171,7 @@ Allocator::ImageOutput Allocator::imagePool(
       .arrayLayers  = 1,
       .samples      = vk::SampleCountFlagBits::e1,
       .tiling       = vk::ImageTiling::eOptimal,
-      .usage        = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferDst
+      .usage        = usage
     }));
   }
 
@@ -198,7 +200,7 @@ Allocator::ImageOutput Allocator::imagePool(
     views.emplace_back(engine.m_context.device().createImageView(vk::ImageViewCreateInfo{
       .image            = image,
       .viewType         = vk::ImageViewType::e2D,
-      .format           = vk::Format::eR8G8B8A8Srgb,
+      .format           = format,
       .subresourceRange = {
         .aspectMask = vk::ImageAspectFlagBits::eColor,
         .levelCount = 1,

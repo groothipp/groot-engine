@@ -65,7 +65,10 @@ class Allocator {
       unsigned int imageCount,
       unsigned int samplerCount
     );
-    static ImageOutput imagePool(const Engine&, const std::vector<std::pair<unsigned int, unsigned int>>&);
+    static ImageOutput imagePool(const Engine&, const std::vector<std::pair<unsigned int, unsigned int>>&,
+      const vk::ImageUsageFlags&,
+      const vk::Format&
+    );
     static SamplerOutput sampler(const Engine&);
 
   private:

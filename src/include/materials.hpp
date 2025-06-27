@@ -7,13 +7,6 @@
 
 #include <map>
 
-#define all_stages  vk::ShaderStageFlagBits::eVertex                  | \
-                    vk::ShaderStageFlagBits::eGeometry                | \
-                    vk::ShaderStageFlagBits::eTessellationControl     | \
-                    vk::ShaderStageFlagBits::eTessellationEvaluation  | \
-                    vk::ShaderStageFlagBits::eFragment                | \
-                    vk::ShaderStageFlagBits::eCompute
-
 namespace ge {
 
 class BufferProxy;
@@ -54,7 +47,8 @@ class MaterialManager {
         Builder& add_mutable(BufferProxy *);
         Builder& add_immutable(unsigned int, void *);
         Builder& add_texture(const std::string&);
-        // Builder& add_canvas();
+        Builder& add_canvas();
+        Builder& compute_space(unsigned int, unsigned int);
 
       private:
         std::map<vk::ShaderStageFlagBits, std::string> m_shaders;
@@ -62,6 +56,8 @@ class MaterialManager {
         std::vector<std::pair<unsigned int, void *>> m_immutables;
         std::vector<std::string> m_texturePaths;
         std::vector<std::tuple<unsigned int, unsigned int, unsigned int, std::vector<char>>> m_textures;
+        unsigned int m_canvasCount = 0;
+        std::pair<unsigned int, unsigned int> m_computeSpace = { 1, 1 };
     };
 
   private:
@@ -69,8 +65,11 @@ class MaterialManager {
       using Output = std::tuple<
         const std::string&,
         const vk::raii::Pipeline&,
+        const vk::raii::Pipeline&,
         const vk::raii::PipelineLayout&,
-        const vk::raii::DescriptorSets&
+        const vk::raii::DescriptorSets&,
+        const unsigned int&,
+        const unsigned int&
       >;
 
       public:
@@ -108,6 +107,7 @@ class MaterialManager {
     Iterator end() const;
 
     bool exists(const std::string&) const;
+    void transitionImages(vk::raii::CommandBuffer&, vk::raii::CommandBuffer&) const;
 
     void add(const std::string&, Builder&);
     void load(const Engine&, const std::map<std::string, std::vector<mat4>>&);
@@ -127,8 +127,11 @@ class Material {
 
   using Output = std::tuple<
     const vk::raii::Pipeline&,
+    const vk::raii::Pipeline&,
     const vk::raii::PipelineLayout&,
-    const vk::raii::DescriptorSets&
+    const vk::raii::DescriptorSets&,
+    const unsigned int&,
+    const unsigned int&
   >;
 
   public:
@@ -143,7 +146,9 @@ class Material {
 
     Output operator*() const;
 
-    void load(const Engine&, const MaterialManager::Builder&, const std::vector<mat4>&);
+    void transitionImages(vk::raii::CommandBuffer&, vk::raii::CommandBuffer&) const;
+
+    void load(const Engine&, MaterialManager::Builder&, const std::vector<mat4>&);
     void batchMutable(void *, unsigned int, const std::vector<unsigned int>&);
     void updateTransforms(unsigned int, const std::vector<mat4>&);
     void updateMutables(unsigned int);
@@ -158,9 +163,11 @@ class Material {
 
   private:
     std::map<void *, std::pair<unsigned int, std::vector<unsigned int>>> m_mutableUpdates;
+    std::pair<unsigned int, unsigned int> m_computeSpace = { 1, 1 };
 
     vk::raii::PipelineLayout m_layout = nullptr;
     vk::raii::Pipeline m_pipeline = nullptr;
+    vk::raii::Pipeline m_compute = nullptr;
 
     vk::raii::DescriptorSetLayout m_setLayout = nullptr;
     vk::raii::DescriptorPool m_pool = nullptr;
@@ -183,6 +190,10 @@ class Material {
     vk::raii::DeviceMemory m_textureMemory = nullptr;
     std::vector<vk::raii::Image> m_textures;
     std::vector<vk::raii::ImageView> m_textureViews;
+
+    vk::raii::DeviceMemory m_canvasMemory = nullptr;
+    std::vector<vk::raii::Image> m_canvases;
+    std::vector<vk::raii::ImageView> m_canvasViews;
 };
 
 } // namespace ge
