@@ -9,7 +9,23 @@ class GLFWwindow;
 namespace groot {
 
 class Allocator;
+class ShaderCompiler;
 class VulkanContext;
+
+enum ShaderType {
+  Vertex,
+  Fragment,
+  TesselationControl,
+  TesselationEvaluation,
+  Compute
+};
+
+enum ResourceType {
+  Invalid,
+  Buffer,
+  Shader,
+  Pipeline
+};
 
 struct Settings {
   std::string application_name = "Groot Engine Application";
@@ -24,6 +40,11 @@ class RID {
   friend class Engine;
 
   unsigned long m_id = ~(0x0);
+  ResourceType m_type = ResourceType::Invalid;
+
+  struct Hash {
+    std::size_t operator()(const RID&) const;
+  };
 
   public:
     RID() = default;
@@ -35,12 +56,13 @@ class RID {
     RID& operator=(const RID&) = default;
     RID& operator=(RID&&) = default;
 
+    bool operator==(const RID&) const;
     const unsigned long& operator*() const;
 
     bool is_valid() const;
 
   private:
-    explicit RID(unsigned long);
+    explicit RID(unsigned long, ResourceType);
 
     void invalidate();
 };
@@ -50,6 +72,7 @@ class Engine {
   GLFWwindow * m_window = nullptr;
   VulkanContext * m_context = nullptr;
   Allocator * m_allocator = nullptr;
+  ShaderCompiler * m_compiler = nullptr;
 
   double m_frameTime = 0.0;
   double m_time = 0.0;
@@ -75,8 +98,28 @@ class Engine {
     void update_buffer(const RID&, std::size_t, void *) const;
     void destroy_buffer(RID&);
 
+    RID compile_shader(ShaderType type, const std::string&);
+    void destroy_shader(RID&);
+
   private:
     void updateTimes();
+};
+
+class Log {
+  public:
+    Log() = delete;
+    Log(const Log&) = delete;
+    Log(Log&&) = delete;
+
+    ~Log() = default;
+
+    Log& operator=(const Log&) = delete;
+    Log& operator=(Log&&) = delete;
+
+    static void generic(const std::string&);
+    static void warn(const std::string&);
+    static void runtime_error(const std::string&);
+    static void out_of_range(const std::string&);
 };
 
 } // namespace groot

@@ -18,7 +18,7 @@ VulkanContext::VulkanContext(const std::string& applicationName, const unsigned 
     .pApplicationName   = applicationName.c_str(),
     .applicationVersion = applicationVersion,
     .pEngineName        = "Groot Engine",
-    .engineVersion      = VK_MAKE_API_VERSION(0, 0, 14, 0),
+    .engineVersion      = VK_MAKE_API_VERSION(0, GROOT_VERSION_MAJOR, GROOT_VERSION_MINOR, GROOT_VERSION_PATCH),
     .apiVersion         = VK_MAKE_API_VERSION(0, 1, 4, 328)
   };
 
@@ -37,6 +37,7 @@ VulkanContext::VulkanContext(const std::string& applicationName, const unsigned 
     extensions.emplace_back(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
     flags |= vk::InstanceCreateFlagBits::eEnumeratePortabilityKHR;
 
+    Log::generic("enabled portability enumeration");
     break;
   }
 
@@ -51,49 +52,51 @@ VulkanContext::VulkanContext(const std::string& applicationName, const unsigned 
     .ppEnabledExtensionNames  = extensions.data()
   };
 
-  m_instance = vk::raii::Context().createInstance(createInfo);
-  if (!*m_instance)
-    Log::runtime_error("failed to create vulkan instance");
+  m_instance = vk::createInstance(createInfo);
+  if (!m_instance)
+    Log::runtime_error("failed to create instance");
+}
+
+VulkanContext::~VulkanContext() {
+  m_device.destroy();
+  m_instance.destroySurfaceKHR(m_surface);
+  m_instance.destroy();
 }
 
 void VulkanContext::printInfo() const {
   vk::PhysicalDeviceProperties properties = m_gpu.getProperties();
 
-  unsigned int variant = (properties.apiVersion >> 29) & 0b111;
-  unsigned int major = (properties.apiVersion >> 22) & 0b1111111;
-  unsigned int minor = (properties.apiVersion >> 12) & 0b1111111111;
-  unsigned int patch = properties.apiVersion & 0xFFF;
-  std::string versionString =
-    std::to_string(variant) + '.' + std::to_string(major)
-    + '.' + std::to_string(minor) + '.' + std::to_string(patch);
-
-  Log::generic(
-    "using Vulkan " + versionString
-    + " on " + std::string(properties.deviceName)
-    + " (" + vk::to_string(properties.deviceType) + ')'
-  );
+  Log::generic(std::format("using Vulkan {}.{}.{} on {} ({})\n",
+    VK_VERSION_MAJOR(properties.apiVersion),
+    VK_VERSION_MINOR(properties.apiVersion),
+    VK_VERSION_PATCH(properties.apiVersion),
+    std::string(properties.deviceName),
+    vk::to_string(properties.deviceType)
+  ));
 }
 
-const vk::raii::Instance& VulkanContext::instance() const {
+const vk::Instance& VulkanContext::instance() const {
   return m_instance;
 }
 
-const vk::raii::PhysicalDevice& VulkanContext::gpu() const {
+const vk::PhysicalDevice& VulkanContext::gpu() const {
   return m_gpu;
 }
 
-const vk::raii::Device& VulkanContext::device() const {
+const vk::Device& VulkanContext::device() const {
   return m_device;
 }
 
+const bool& VulkanContext::supportsTesselation() const {
+  return m_tesselationSupport;
+}
+
 void VulkanContext::createSurface(GLFWwindow * window) {
-  vk::raii::SurfaceKHR::CType rawSurface = nullptr;
-  if (glfwCreateWindowSurface(*m_instance, window, nullptr, &rawSurface) != VK_SUCCESS)
+  VkSurfaceKHR rawSurface = nullptr;
+  if (glfwCreateWindowSurface(m_instance, window, nullptr, &rawSurface) != VK_SUCCESS)
     Log::runtime_error("failed to create surface");
 
-  m_surface = vk::raii::SurfaceKHR(m_instance, rawSurface);
-  if (!*m_surface)
-    Log::runtime_error("failed to initialize raii surface");
+  m_surface = rawSurface;
 }
 
 void VulkanContext::chooseGPU(const unsigned int& gpuIndex, const std::vector<const char *>& requiredExtensions) {
@@ -105,13 +108,22 @@ void VulkanContext::chooseGPU(const unsigned int& gpuIndex, const std::vector<co
   for (const auto& extension : gpus[gpuIndex].enumerateDeviceExtensionProperties())
     availableExtensions.emplace(extension.extensionName);
 
+  std::string extensionErrors = "";
   for (const auto& extension : requiredExtensions) {
     if (!availableExtensions.contains(extension))
-      Log::runtime_error("GPU does not support the required extensions");
+      extensionErrors += std::format("\n\t{}", extension);
   }
+  if (extensionErrors != "")
+    Log::runtime_error(std::format("GPU does not support the following extensions:{}", extensionErrors));
+
+  vk::PhysicalDeviceFeatures gpuFeatures = gpus[gpuIndex].getFeatures();
+
+  if (!gpuFeatures.tessellationShader)
+    Log::warn("GPU does not support tesselation shaders");
 
   m_gpu = gpus[gpuIndex];
   m_queueFamilyIndices = getQueueFamilyIndices();
+  m_tesselationSupport = gpuFeatures.tessellationShader;
 }
 
 void VulkanContext::createDevice(std::vector<const char *>& extensions) {
@@ -119,16 +131,24 @@ void VulkanContext::createDevice(std::vector<const char *>& extensions) {
   std::vector<vk::DeviceQueueCreateInfo> queueCreateInfos = getQueueCreateInfos(queuePriority);
 
   for (const auto& extension : m_gpu.enumerateDeviceExtensionProperties()) {
-    if (strcmp(extension.extensionName, VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME) == 0) {
-      extensions.emplace_back(VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME);
-      break;
-    }
+    if (strcmp(extension.extensionName, VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME) != 0) continue;
+
+    extensions.emplace_back(VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME);
+
+    Log::generic("enabled portability subset");
+    break;
   }
 
-  vk::PhysicalDeviceFeatures features{};
+  vk::PhysicalDeviceFeatures features{
+    .tessellationShader = m_tesselationSupport
+  };
+
+  vk::PhysicalDeviceDynamicRenderingFeatures dynamicRendering{
+    .dynamicRendering = true
+  };
 
   vk::DeviceCreateInfo deviceCreateInfo{
-    .pNext                    = nullptr,
+    .pNext                    = &dynamicRendering,
     .queueCreateInfoCount     = static_cast<unsigned int>(queueCreateInfos.size()),
     .pQueueCreateInfos        = queueCreateInfos.data(),
     .enabledExtensionCount    = static_cast<unsigned int>(extensions.size()),
@@ -137,7 +157,7 @@ void VulkanContext::createDevice(std::vector<const char *>& extensions) {
   };
 
   m_device = m_gpu.createDevice(deviceCreateInfo);
-  if (!*m_device)
+  if (!m_device)
     Log::runtime_error("failed to create device");
 
   m_graphicsQueue = m_device.getQueue((m_queueFamilyIndices >> GRAPHICS_SHIFT) & 0xFF, 0);

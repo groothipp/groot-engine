@@ -10,9 +10,9 @@ std::size_t VkBufferHash::operator()(VkBuffer buffer) const {
 
 Allocator::Allocator(const VulkanContext * context, unsigned int apiVersion) {
   VmaAllocatorCreateInfo createInfo{
-    .physicalDevice   = *context->gpu(),
-    .device           = *context->device(),
-    .instance         = *context->instance(),
+    .physicalDevice   = context->gpu(),
+    .device           = context->device(),
+    .instance         = context->instance(),
     .vulkanApiVersion = apiVersion
   };
 

@@ -10,6 +10,10 @@ set(TESTS_SOURCES
 
 add_executable(test ${TESTS_SOURCES})
 
+target_compile_definitions(test PRIVATE
+  "GROOT_TEST_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}\""
+)
+
 target_include_directories(test PRIVATE ${CMAKE_SOURCE_DIR})
 
 target_link_libraries(test PRIVATE

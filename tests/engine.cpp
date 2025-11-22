@@ -2,7 +2,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 
-#include <print>
+using namespace groot;
 
 TEST_CASE("engine") {
   bool success = true;
@@ -14,7 +14,11 @@ TEST_CASE("engine") {
   std::size_t size = sizeof(int) * testBuffer.size();
 
   try {
-    groot::Engine engine;
+    Engine engine;
+
+    RID buffer = engine.create_uniform_buffer(sizeof(int) * testBuffer.size());
+    RID shader = engine.compile_shader(ShaderType::Compute, std::format("{}/shaders/shader.comp", GROOT_TEST_DIR));
+
     engine.run([&engine, &testBuffer, &size](double t) {
       groot::RID uniform_buffer = engine.create_uniform_buffer(size);
       groot::RID storage_buffer = engine.create_storage_buffer(size);
@@ -27,7 +31,7 @@ TEST_CASE("engine") {
     });
   }
   catch (const std::exception& e) {
-    std::print("[Groot Engine] Engine Test Failure: {}\n", e.what());
+    Log::warn(std::format("[Groot Engine] Engine Test Failure: {}\n", e.what()));
     success = false;
   }
 

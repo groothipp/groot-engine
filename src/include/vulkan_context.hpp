@@ -1,37 +1,40 @@
 #pragma once
 
-#include <vulkan/vulkan_raii.hpp>
+#include <vulkan/vulkan.hpp>
 
 class GLFWwindow;
 
 namespace groot {
 
 class VulkanContext {
-  vk::raii::Instance m_instance = nullptr;
-  vk::raii::SurfaceKHR m_surface = nullptr;
-  vk::raii::PhysicalDevice m_gpu = nullptr;
-  vk::raii::Device m_device = nullptr;
+  vk::Instance m_instance = nullptr;
+  vk::SurfaceKHR m_surface = nullptr;
+  vk::PhysicalDevice m_gpu = nullptr;
+  vk::Device m_device = nullptr;
+
+  bool m_tesselationSupport = false;
 
   unsigned int m_queueFamilyIndices = 0;
-  vk::raii::Queue m_graphicsQueue = nullptr;
-  vk::raii::Queue m_presentQueue = nullptr;
-  vk::raii::Queue m_transferQueue = nullptr;
-  vk::raii::Queue m_computeQueue = nullptr;
+  vk::Queue m_graphicsQueue = nullptr;
+  vk::Queue m_presentQueue = nullptr;
+  vk::Queue m_transferQueue = nullptr;
+  vk::Queue m_computeQueue = nullptr;
 
   public:
     VulkanContext(const std::string&, const unsigned int&);
     VulkanContext(const VulkanContext&) = delete;
     VulkanContext(VulkanContext&&) = delete;
 
-    ~VulkanContext() = default;
+    ~VulkanContext();
 
     VulkanContext& operator=(const VulkanContext&) = delete;
     VulkanContext& operator=(VulkanContext&&) = delete;
 
     void printInfo() const;
-    const vk::raii::Instance& instance() const;
-    const vk::raii::PhysicalDevice& gpu() const;
-    const vk::raii::Device& device() const;
+    const vk::Instance& instance() const;
+    const vk::PhysicalDevice& gpu() const;
+    const vk::Device& device() const;
+    const bool& supportsTesselation() const;
 
     void createSurface(GLFWwindow *);
     void chooseGPU(const unsigned int&, const std::vector<const char *>&);

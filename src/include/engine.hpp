@@ -1,16 +1,20 @@
 #pragma once
 
+#include "src/include/rid.hpp"
+#include "src/include/shader_compiler.hpp"
+
 #include <string>
 #include <unordered_map>
 #include <functional>
+#include <shaderc/shaderc.hpp>
 
 class GLFWwindow;
 
 namespace groot {
 
-class RID;
-class VulkanContext;
 class Allocator;
+class VulkanContext;
+class ShaderCompiler;
 
 struct Settings {
   std::string application_name = "Groot Engine Application";
@@ -26,13 +30,14 @@ class Engine {
   GLFWwindow * m_window = nullptr;
   VulkanContext * m_context = nullptr;
   Allocator * m_allocator = nullptr;
+  ShaderCompiler * m_compiler = nullptr;
 
   double m_frameTime = 0.0;
   double m_time = 0.0;
   double m_accumulator = 0.0;
 
   unsigned long m_nextRID = 0;
-  std::unordered_map<unsigned long, unsigned long> m_resources;
+  std::unordered_map<RID, unsigned long, RID::Hash> m_resources;
 
   public:
     explicit Engine(Settings settings = Settings{});
@@ -50,6 +55,9 @@ class Engine {
     RID create_storage_buffer(unsigned int);
     void update_buffer(const RID&, std::size_t, void *) const;
     void destroy_buffer(RID&);
+
+    RID compile_shader(ShaderType type, const std::string&);
+    void destroy_shader(RID&);
 
   private:
     void updateTimes();
