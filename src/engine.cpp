@@ -6,6 +6,8 @@
 
 #include <GLFW/glfw3.h>
 
+#include <chrono>
+
 namespace groot {
 
 Engine::Engine(Settings settings) : m_settings(settings) {
@@ -41,9 +43,15 @@ Engine::~Engine() {
   glfwTerminate();
 }
 
-void Engine::run() {
+void Engine::run(std::function<void(double)> code) {
   while (!glfwWindowShouldClose(m_window)) {
+    updateTimes();
     glfwPollEvents();
+
+    while (m_accumulator >= m_settings.time_step) {
+      code(m_settings.time_step);
+      m_accumulator -= m_settings.time_step;
+    }
   }
 }
 
@@ -67,6 +75,44 @@ RID Engine::create_storage_buffer(unsigned int size) {
 
   m_buffers[m_nextRID] = reinterpret_cast<unsigned long>(static_cast<VkBuffer>(buffer));
   return RID(m_nextRID++);
+}
+
+void Engine::destroy_buffer(RID& rid) {
+  if (!rid.is_valid()) {
+    Log::warn("tried to destroy a buffer with an invalid RID");
+    return;
+  }
+
+  vk::Buffer buffer = reinterpret_cast<VkBuffer>(m_buffers.at(*rid));
+
+  m_allocator->destroyBuffer(buffer);
+  m_buffers.erase(*rid);
+
+  rid.invalidate();
+}
+
+void Engine::update_buffer(const RID& rid, std::size_t size, void * data) const {
+  if (!rid.is_valid()) {
+    Log::warn("tried to update buffer with an invalid RID");
+    return;
+  }
+
+  vk::Buffer buffer = reinterpret_cast<VkBuffer>(m_buffers.at(*rid));
+
+  void * map = m_allocator->mapBuffer(buffer);
+  std::memcpy(map, data, size);
+  m_allocator->unmapBuffer(buffer);
+}
+
+void Engine::updateTimes() {
+  static std::chrono::time_point start = std::chrono::high_resolution_clock::now();
+  std::chrono::time_point now = std::chrono::high_resolution_clock::now();
+
+  double time = std::chrono::duration(now - start).count();
+
+  m_frameTime = std::min(time - m_time, 0.25);
+  m_time = time;
+  m_accumulator += m_frameTime;
 }
 
 } // namespace groot

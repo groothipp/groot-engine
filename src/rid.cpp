@@ -12,4 +12,8 @@ bool RID::is_valid() const {
   return m_id != ~(0x0);
 }
 
+void RID::invalidate() {
+  m_id = ~(0x0);
+}
+
 } // namespace groot

@@ -51,4 +51,25 @@ vk::Buffer Allocator::allocateBuffer(const vk::BufferCreateInfo& bufferCreateInf
   return buffer;
 }
 
+void * Allocator::mapBuffer(const vk::Buffer& buffer) {
+  VmaAllocation alloc = m_buffers.at(buffer);
+
+  void * map = nullptr;
+  if (vmaMapMemory(m_allocator, alloc, &map) != VK_SUCCESS)
+    Log::runtime_error("failed to map buffer memory");
+
+  return map;
+}
+
+void Allocator::unmapBuffer(const vk::Buffer& buffer) {
+  VmaAllocation alloc = m_buffers.at(buffer);
+  vmaUnmapMemory(m_allocator, alloc);
+}
+
+void Allocator::destroyBuffer(const vk::Buffer& buffer) {
+  VmaAllocation alloc = m_buffers.at(buffer);
+  vmaDestroyBuffer(m_allocator, buffer, alloc);
+  m_buffers.erase(buffer);
+}
+
 } // namespace groot

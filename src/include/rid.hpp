@@ -23,6 +23,8 @@ class RID {
 
   private:
     explicit RID(unsigned long);
+
+    void invalidate();
 };
 
 } // namespace groot

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <functional>
 #include <string>
 #include <unordered_map>
 
@@ -16,6 +17,7 @@ struct Settings {
   std::pair<unsigned int, unsigned int> window_size = std::make_pair(1280, 720);
   std::string window_title = "Groot Engine Application";
   unsigned int gpu_index = 0;
+  double time_step = 1.0 / 60.0;
 };
 
 class RID {
@@ -39,6 +41,8 @@ class RID {
 
   private:
     explicit RID(unsigned long);
+
+    void invalidate();
 };
 
 class Engine {
@@ -46,6 +50,10 @@ class Engine {
   GLFWwindow * m_window = nullptr;
   VulkanContext * m_context = nullptr;
   Allocator * m_allocator = nullptr;
+
+  double m_frameTime = 0.0;
+  double m_time = 0.0;
+  double m_accumulator = 0.0;
 
   unsigned long m_nextRID = 0;
   std::unordered_map<unsigned long, unsigned long> m_buffers;
@@ -60,10 +68,16 @@ class Engine {
     Engine& operator=(const Engine&) = delete;
     Engine& operator=(Engine&&) = delete;
 
-    void run();
+    void run(std::function<void(double)> code = [](double){});
 
     RID create_uniform_buffer(unsigned int);
     RID create_storage_buffer(unsigned int);
+    void destroy_buffer(RID&);
+
+    void update_buffer(const RID&, std::size_t, void *) const;
+
+  private:
+    void updateTimes();
 };
 
 } // namespace groot
