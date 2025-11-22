@@ -1,0 +1,2 @@
+/usr/bin/ar qc libgroot.a CMakeFiles/groot.dir/allocator.cpp.o CMakeFiles/groot.dir/engine.cpp.o CMakeFiles/groot.dir/log.cpp.o CMakeFiles/groot.dir/rid.cpp.o CMakeFiles/groot.dir/vma.cpp.o CMakeFiles/groot.dir/vulkan_context.cpp.o
+/opt/homebrew/Cellar/llvm/21.1.6/bin/llvm-ranlib libgroot.a

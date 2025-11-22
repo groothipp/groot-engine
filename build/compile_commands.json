@@ -1,0 +1,44 @@
+[
+{
+  "directory": "/Users/groot/Documents/.dev/.remote/groot-engine/build/src",
+  "command": "/opt/homebrew/Cellar/llvm/21.1.6/bin/clang++ -DGLFW_INCLUDE_NONE -DVULKAN_HPP_NO_CONSTRUCTORS -I/Users/groot/Documents/.dev/.remote/groot-engine -I/opt/homebrew/include -I/usr/local/include -std=gnu++23 -arch arm64 -o CMakeFiles/groot.dir/allocator.cpp.o -c /Users/groot/Documents/.dev/.remote/groot-engine/src/allocator.cpp",
+  "file": "/Users/groot/Documents/.dev/.remote/groot-engine/src/allocator.cpp",
+  "output": "src/CMakeFiles/groot.dir/allocator.cpp.o"
+},
+{
+  "directory": "/Users/groot/Documents/.dev/.remote/groot-engine/build/src",
+  "command": "/opt/homebrew/Cellar/llvm/21.1.6/bin/clang++ -DGLFW_INCLUDE_NONE -DVULKAN_HPP_NO_CONSTRUCTORS -I/Users/groot/Documents/.dev/.remote/groot-engine -I/opt/homebrew/include -I/usr/local/include -std=gnu++23 -arch arm64 -o CMakeFiles/groot.dir/engine.cpp.o -c /Users/groot/Documents/.dev/.remote/groot-engine/src/engine.cpp",
+  "file": "/Users/groot/Documents/.dev/.remote/groot-engine/src/engine.cpp",
+  "output": "src/CMakeFiles/groot.dir/engine.cpp.o"
+},
+{
+  "directory": "/Users/groot/Documents/.dev/.remote/groot-engine/build/src",
+  "command": "/opt/homebrew/Cellar/llvm/21.1.6/bin/clang++ -DGLFW_INCLUDE_NONE -DVULKAN_HPP_NO_CONSTRUCTORS -I/Users/groot/Documents/.dev/.remote/groot-engine -I/opt/homebrew/include -I/usr/local/include -std=gnu++23 -arch arm64 -o CMakeFiles/groot.dir/log.cpp.o -c /Users/groot/Documents/.dev/.remote/groot-engine/src/log.cpp",
+  "file": "/Users/groot/Documents/.dev/.remote/groot-engine/src/log.cpp",
+  "output": "src/CMakeFiles/groot.dir/log.cpp.o"
+},
+{
+  "directory": "/Users/groot/Documents/.dev/.remote/groot-engine/build/src",
+  "command": "/opt/homebrew/Cellar/llvm/21.1.6/bin/clang++ -DGLFW_INCLUDE_NONE -DVULKAN_HPP_NO_CONSTRUCTORS -I/Users/groot/Documents/.dev/.remote/groot-engine -I/opt/homebrew/include -I/usr/local/include -std=gnu++23 -arch arm64 -o CMakeFiles/groot.dir/rid.cpp.o -c /Users/groot/Documents/.dev/.remote/groot-engine/src/rid.cpp",
+  "file": "/Users/groot/Documents/.dev/.remote/groot-engine/src/rid.cpp",
+  "output": "src/CMakeFiles/groot.dir/rid.cpp.o"
+},
+{
+  "directory": "/Users/groot/Documents/.dev/.remote/groot-engine/build/src",
+  "command": "/opt/homebrew/Cellar/llvm/21.1.6/bin/clang++ -DGLFW_INCLUDE_NONE -DVULKAN_HPP_NO_CONSTRUCTORS -I/Users/groot/Documents/.dev/.remote/groot-engine -I/opt/homebrew/include -I/usr/local/include -std=gnu++23 -arch arm64 -Wno-nullability-completeness -o CMakeFiles/groot.dir/vma.cpp.o -c /Users/groot/Documents/.dev/.remote/groot-engine/src/vma.cpp",
+  "file": "/Users/groot/Documents/.dev/.remote/groot-engine/src/vma.cpp",
+  "output": "src/CMakeFiles/groot.dir/vma.cpp.o"
+},
+{
+  "directory": "/Users/groot/Documents/.dev/.remote/groot-engine/build/src",
+  "command": "/opt/homebrew/Cellar/llvm/21.1.6/bin/clang++ -DGLFW_INCLUDE_NONE -DVULKAN_HPP_NO_CONSTRUCTORS -I/Users/groot/Documents/.dev/.remote/groot-engine -I/opt/homebrew/include -I/usr/local/include -std=gnu++23 -arch arm64 -o CMakeFiles/groot.dir/vulkan_context.cpp.o -c /Users/groot/Documents/.dev/.remote/groot-engine/src/vulkan_context.cpp",
+  "file": "/Users/groot/Documents/.dev/.remote/groot-engine/src/vulkan_context.cpp",
+  "output": "src/CMakeFiles/groot.dir/vulkan_context.cpp.o"
+},
+{
+  "directory": "/Users/groot/Documents/.dev/.remote/groot-engine/build/tests",
+  "command": "/opt/homebrew/Cellar/llvm/21.1.6/bin/clang++  -I/Users/groot/Documents/.dev/.remote/groot-engine -I/opt/homebrew/include -I/usr/local/include -std=gnu++23 -arch arm64 -o CMakeFiles/test.dir/engine.cpp.o -c /Users/groot/Documents/.dev/.remote/groot-engine/tests/engine.cpp",
+  "file": "/Users/groot/Documents/.dev/.remote/groot-engine/tests/engine.cpp",
+  "output": "tests/CMakeFiles/test.dir/engine.cpp.o"
+}
+]
