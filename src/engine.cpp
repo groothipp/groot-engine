@@ -62,7 +62,7 @@ RID Engine::create_uniform_buffer(unsigned int size) {
     .sharingMode  = vk::SharingMode::eExclusive
   });
 
-  m_buffers[m_nextRID] = reinterpret_cast<unsigned long>(static_cast<VkBuffer>(buffer));
+  m_resources[m_nextRID] = reinterpret_cast<unsigned long>(static_cast<VkBuffer>(buffer));
   return RID(m_nextRID++);
 }
 
@@ -73,7 +73,7 @@ RID Engine::create_storage_buffer(unsigned int size) {
     .sharingMode  = vk::SharingMode::eExclusive
   });
 
-  m_buffers[m_nextRID] = reinterpret_cast<unsigned long>(static_cast<VkBuffer>(buffer));
+  m_resources[m_nextRID] = reinterpret_cast<unsigned long>(static_cast<VkBuffer>(buffer));
   return RID(m_nextRID++);
 }
 
@@ -83,10 +83,10 @@ void Engine::destroy_buffer(RID& rid) {
     return;
   }
 
-  vk::Buffer buffer = reinterpret_cast<VkBuffer>(m_buffers.at(*rid));
+  vk::Buffer buffer = reinterpret_cast<VkBuffer>(m_resources.at(*rid));
 
   m_allocator->destroyBuffer(buffer);
-  m_buffers.erase(*rid);
+  m_resources.erase(*rid);
 
   rid.invalidate();
 }
@@ -97,7 +97,7 @@ void Engine::update_buffer(const RID& rid, std::size_t size, void * data) const 
     return;
   }
 
-  vk::Buffer buffer = reinterpret_cast<VkBuffer>(m_buffers.at(*rid));
+  vk::Buffer buffer = reinterpret_cast<VkBuffer>(m_resources.at(*rid));
 
   void * map = m_allocator->mapBuffer(buffer);
   std::memcpy(map, data, size);

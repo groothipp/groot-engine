@@ -18,7 +18,7 @@ VulkanContext::VulkanContext(const std::string& applicationName, const unsigned 
     .pApplicationName   = applicationName.c_str(),
     .applicationVersion = applicationVersion,
     .pEngineName        = "Groot Engine",
-    .engineVersion      = VK_MAKE_API_VERSION(0, 0, 12, 1),
+    .engineVersion      = VK_MAKE_API_VERSION(0, 0, 14, 0),
     .apiVersion         = VK_MAKE_API_VERSION(0, 1, 4, 328)
   };
 

@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 4.2)
 
 project(GrootEngine
-  VERSION 0.12.1
+  VERSION 0.14.0
   LANGUAGES CXX
 )
 

@@ -56,7 +56,7 @@ class Engine {
   double m_accumulator = 0.0;
 
   unsigned long m_nextRID = 0;
-  std::unordered_map<unsigned long, unsigned long> m_buffers;
+  std::unordered_map<unsigned long, unsigned long> m_resources;
 
   public:
     explicit Engine(Settings settings = Settings{});
@@ -72,9 +72,8 @@ class Engine {
 
     RID create_uniform_buffer(unsigned int);
     RID create_storage_buffer(unsigned int);
-    void destroy_buffer(RID&);
-
     void update_buffer(const RID&, std::size_t, void *) const;
+    void destroy_buffer(RID&);
 
   private:
     void updateTimes();
