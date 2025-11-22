@@ -1,0 +1,54 @@
+#include "src/include/allocator.hpp"
+#include "src/include/log.hpp"
+#include "src/include/vulkan_context.hpp"
+
+namespace groot {
+
+std::size_t VkBufferHash::operator()(VkBuffer buffer) const {
+  return std::hash<unsigned long>{}(reinterpret_cast<unsigned long>(buffer));
+}
+
+Allocator::Allocator(const VulkanContext * context, unsigned int apiVersion) {
+  VmaAllocatorCreateInfo createInfo{
+    .physicalDevice   = *context->gpu(),
+    .device           = *context->device(),
+    .instance         = *context->instance(),
+    .vulkanApiVersion = apiVersion
+  };
+
+  if (vmaCreateAllocator(&createInfo, &m_allocator) != VK_SUCCESS)
+    Log::runtime_error("failed to create allocator");
+}
+
+Allocator::~Allocator() {
+  for (auto [buffer, allocation] : m_buffers)
+    vmaDestroyBuffer(m_allocator, buffer, allocation);
+
+  if (m_allocator)
+    vmaDestroyAllocator(m_allocator);
+}
+
+vk::Buffer Allocator::allocateBuffer(const vk::BufferCreateInfo& bufferCreateInfo, VmaMemoryUsage usage, VmaAllocationCreateFlags flags) {
+  VmaAllocationCreateInfo allocationCreateInfo{
+    .flags = flags,
+    .usage = usage
+  };
+
+  VkBuffer buffer = nullptr;
+  VmaAllocation allocation = nullptr;
+  if (vmaCreateBuffer(
+    m_allocator,
+    reinterpret_cast<const VkBufferCreateInfo *>(&bufferCreateInfo),
+    &allocationCreateInfo,
+    &buffer,
+    &allocation,
+    nullptr
+  ) != VK_SUCCESS) {
+    Log::runtime_error("failed to create buffer");
+  }
+
+  m_buffers[buffer] = allocation;
+  return buffer;
+}
+
+} // namespace groot

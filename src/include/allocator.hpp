@@ -1,0 +1,33 @@
+#pragma once
+
+#include <vulkan/vulkan_raii.hpp>
+#include <vk_mem_alloc.h>
+
+#include <unordered_map>
+
+namespace groot {
+
+class VulkanContext;
+
+struct VkBufferHash {
+  size_t operator()(VkBuffer) const;
+};
+
+class Allocator {
+  VmaAllocator m_allocator = nullptr;
+  std::unordered_map<VkBuffer, VmaAllocation, VkBufferHash> m_buffers;
+
+  public:
+    explicit Allocator(const VulkanContext *, unsigned int);
+    Allocator(const Allocator&) = delete;
+    Allocator(Allocator&&) = delete;
+
+    ~Allocator();
+
+    Allocator& operator=(const Allocator&) = delete;
+    Allocator& operator=(Allocator&&) = delete;
+
+    vk::Buffer allocateBuffer(const vk::BufferCreateInfo&, VmaMemoryUsage usage = VMA_MEMORY_USAGE_AUTO, VmaAllocationCreateFlags flags = 0);
+};
+
+} // namespace groot
