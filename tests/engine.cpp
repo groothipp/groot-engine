@@ -16,22 +16,37 @@ TEST_CASE("engine") {
   try {
     Engine engine;
 
-    RID buffer = engine.create_uniform_buffer(sizeof(int) * testBuffer.size());
-    RID shader = engine.compile_shader(ShaderType::Compute, std::format("{}/shaders/shader.comp", GROOT_TEST_DIR));
+    std::string shaderPath = std::format("{}/shaders/shader.glsl", GROOT_TEST_DIR);
 
-    engine.run([&engine, &testBuffer, &size](double t) {
-      groot::RID uniform_buffer = engine.create_uniform_buffer(size);
-      groot::RID storage_buffer = engine.create_storage_buffer(size);
+    RID vertex = engine.compile_shader(ShaderType::Vertex, shaderPath);
+    RID fragment = engine.compile_shader(ShaderType::Fragment, shaderPath);
+    RID compute = engine.compile_shader(ShaderType::Compute, shaderPath);
 
-      engine.update_buffer(uniform_buffer, size, testBuffer.data());
-      engine.update_buffer(storage_buffer, size, testBuffer.data());
+    RID buffer1 = engine.create_uniform_buffer(size);
+    RID buffer2 = engine.create_storage_buffer(size);
+    RID set = engine.create_descriptor_set({ buffer1, buffer2 });
+    RID pipeline = engine.create_compute_pipeline(compute, set);
 
-      engine.destroy_buffer(uniform_buffer);
-      engine.destroy_buffer(storage_buffer);
+    engine.run([&engine, &testBuffer, &size, &vertex, &fragment](double t) {
+      RID uniformBuffer = engine.create_uniform_buffer(size);
+      RID storageBuffer = engine.create_storage_buffer(size);
+      RID descriptorSet = engine.create_descriptor_set({ uniformBuffer, storageBuffer });
+      RID graphicsPipeline = engine.create_graphics_pipeline(GraphicsPipelineShaders{
+        .vertex = vertex,
+        .fragment = fragment
+      }, descriptorSet, GraphicsPipelineSettings{});
+
+      engine.update_buffer(uniformBuffer, size, testBuffer.data());
+      engine.update_buffer(storageBuffer, size, testBuffer.data());
+
+      engine.destroy_pipeline(graphicsPipeline);
+      engine.destroy_descriptor_set(descriptorSet);
+      engine.destroy_buffer(uniformBuffer);
+      engine.destroy_buffer(storageBuffer);
     });
   }
   catch (const std::exception& e) {
-    Log::warn(std::format("[Groot Engine] Engine Test Failure: {}\n", e.what()));
+    Log::warn(e.what());
     success = false;
   }
 

@@ -6,9 +6,11 @@ namespace groot {
 
 enum ResourceType {
   Invalid,
-  Buffer,
   Shader,
-  Pipeline
+  Pipeline,
+  DescriptorSet,
+  UniformBuffer,
+  StorageBuffer
 };
 
 class RID {

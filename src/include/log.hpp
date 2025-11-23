@@ -21,4 +21,4 @@ class Log {
     static void out_of_range(const std::string&);
 };
 
-}
+} // namespace groot

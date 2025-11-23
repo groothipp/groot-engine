@@ -1,4 +1,5 @@
 #include "src/include/log.hpp"
+#include "vulkan/vulkan.hpp"
 #include "src/include/vulkan_context.hpp"
 
 #include <vulkan/vulkan_beta.h>
@@ -111,7 +112,7 @@ void VulkanContext::chooseGPU(const unsigned int& gpuIndex, const std::vector<co
   std::string extensionErrors = "";
   for (const auto& extension : requiredExtensions) {
     if (!availableExtensions.contains(extension))
-      extensionErrors += std::format("\n\t{}", extension);
+      extensionErrors += std::format("\n\t{}", std::string(extension));
   }
   if (extensionErrors != "")
     Log::runtime_error(std::format("GPU does not support the following extensions:{}", extensionErrors));
@@ -143,12 +144,12 @@ void VulkanContext::createDevice(std::vector<const char *>& extensions) {
     .tessellationShader = m_tesselationSupport
   };
 
-  vk::PhysicalDeviceDynamicRenderingFeatures dynamicRendering{
+  vk::PhysicalDeviceDynamicRenderingFeatures dynamicRenderingFeature{
     .dynamicRendering = true
   };
 
   vk::DeviceCreateInfo deviceCreateInfo{
-    .pNext                    = &dynamicRendering,
+    .pNext                    = &dynamicRenderingFeature,
     .queueCreateInfoCount     = static_cast<unsigned int>(queueCreateInfos.size()),
     .pQueueCreateInfos        = queueCreateInfos.data(),
     .enabledExtensionCount    = static_cast<unsigned int>(extensions.size()),

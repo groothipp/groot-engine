@@ -2,13 +2,13 @@
 #include "src/include/engine.hpp"
 #include "src/include/log.hpp"
 #include "src/include/vulkan_context.hpp"
+#include "vulkan/vulkan.hpp"
 
 #include <GLFW/glfw3.h>
 
 #include <chrono>
 
 namespace groot {
-
 
 Engine::Engine(Settings settings) : m_settings(settings) {
   if (!glfwInit())
@@ -43,13 +43,33 @@ Engine::Engine(Settings settings) : m_settings(settings) {
 Engine::~Engine() {
   for (auto& [rid, handle] : m_resources) {
     switch (rid.m_type) {
-      case ResourceType::Buffer:
-        m_allocator->destroyBuffer(reinterpret_cast<VkBuffer>(handle));
+      case ResourceType::Invalid:
         break;
       case ResourceType::Shader:
         m_context->device().destroyShaderModule(reinterpret_cast<VkShaderModule>(handle));
         break;
-      default: break;
+      case ResourceType::Pipeline: {
+        PipelineHandle * pipeline = reinterpret_cast<PipelineHandle *>(handle);
+
+        m_context->device().destroyPipelineLayout(pipeline->layout);
+        m_context->device().destroyPipeline(pipeline->pipeline);
+        delete pipeline;
+
+        break;
+      }
+      case ResourceType::DescriptorSet: {
+        DescriptorSetHandle * set = reinterpret_cast<DescriptorSetHandle *>(handle);
+
+        m_context->device().destroyDescriptorSetLayout(set->layout);
+        m_context->device().destroyDescriptorPool(set->pool);
+        delete set;
+
+        break;
+      }
+      case ResourceType::UniformBuffer:
+      case ResourceType::StorageBuffer:
+        m_allocator->destroyBuffer(reinterpret_cast<VkBuffer>(handle));
+        break;
     }
   }
 
@@ -79,7 +99,7 @@ RID Engine::create_uniform_buffer(unsigned int size) {
     .sharingMode  = vk::SharingMode::eExclusive
   });
 
-  RID rid = RID(m_nextRID++, ResourceType::Buffer);
+  RID rid = RID(m_nextRID++, ResourceType::UniformBuffer);
   m_resources[rid] = reinterpret_cast<unsigned long>(static_cast<VkBuffer>(buffer));
 
   return rid;
@@ -92,7 +112,7 @@ RID Engine::create_storage_buffer(unsigned int size) {
     .sharingMode  = vk::SharingMode::eExclusive
   });
 
-  RID rid = RID(m_nextRID++, ResourceType::Buffer);
+  RID rid = RID(m_nextRID++, ResourceType::StorageBuffer);
   m_resources[rid] = reinterpret_cast<unsigned long>(static_cast<VkBuffer>(buffer));
 
   return rid;
@@ -104,7 +124,7 @@ void Engine::update_buffer(const RID& rid, std::size_t size, void * data) const 
     return;
   }
 
-  if (rid.m_type != ResourceType::Buffer) {
+  if (rid.m_type != ResourceType::UniformBuffer && rid.m_type != ResourceType::StorageBuffer) {
     Log::warn("tried to update buffer of a non-buffer resource");
     return;
   }
@@ -122,7 +142,7 @@ void Engine::destroy_buffer(RID& rid) {
     return;
   }
 
-  if (rid.m_type != ResourceType::Buffer) {
+  if (rid.m_type != ResourceType::UniformBuffer && rid.m_type != ResourceType::StorageBuffer) {
     Log::warn("tried to destroy buffer of a non-buffer resource");
     return;
   }
@@ -169,6 +189,414 @@ void Engine::destroy_shader(RID& rid) {
   m_resources.erase(rid);
 
   rid.invalidate();
+}
+
+RID Engine::create_descriptor_set(const std::vector<RID>& descriptors) {
+  std::vector<vk::DescriptorPoolSize> poolSizes = {};
+
+  std::vector<vk::DescriptorBufferInfo> bufferInfos;
+  bufferInfos.reserve(descriptors.size());
+
+  std::vector<vk::WriteDescriptorSet> writes;
+
+  unsigned int binding = 0;
+  int uniformPoolIndex = -1, storagePoolIndex = -1;
+  std::vector<vk::DescriptorSetLayoutBinding> bindings = {};
+  for (const auto& descriptor : descriptors) {
+    switch (descriptor.m_type) {
+      case UniformBuffer:
+        if (uniformPoolIndex == -1) {
+          uniformPoolIndex = poolSizes.size();
+          poolSizes.emplace_back(vk::DescriptorPoolSize{
+            .type = vk::DescriptorType::eUniformBuffer
+          });
+        }
+        ++poolSizes[uniformPoolIndex].descriptorCount;
+
+        bindings.emplace_back(vk::DescriptorSetLayoutBinding{
+          .binding          = binding,
+          .descriptorType   = vk::DescriptorType::eUniformBuffer,
+          .descriptorCount  = 1
+        });
+
+        bufferInfos.emplace_back(vk::DescriptorBufferInfo{
+          .buffer = reinterpret_cast<VkBuffer>(m_resources.at(descriptor)),
+          .range  = vk::WholeSize
+        });
+
+        writes.emplace_back(vk::WriteDescriptorSet{
+          .dstSet           = nullptr,
+          .dstBinding       = binding++,
+          .descriptorCount  = 1,
+          .descriptorType   = vk::DescriptorType::eUniformBuffer,
+          .pBufferInfo      = &bufferInfos.back()
+        });
+
+        break;
+      case StorageBuffer:
+        if (storagePoolIndex == -1) {
+          storagePoolIndex = poolSizes.size();
+          poolSizes.emplace_back(vk::DescriptorPoolSize{
+            .type = vk::DescriptorType::eStorageBuffer
+          });
+        }
+        ++poolSizes[storagePoolIndex].descriptorCount;
+
+        bindings.emplace_back(vk::DescriptorSetLayoutBinding{
+          .binding          = binding,
+          .descriptorType   = vk::DescriptorType::eStorageBuffer,
+          .descriptorCount  = 1
+        });
+
+        bufferInfos.emplace_back(vk::DescriptorBufferInfo{
+          .buffer = reinterpret_cast<VkBuffer>(m_resources.at(descriptor)),
+          .range  = vk::WholeSize
+        });
+
+        writes.emplace_back(vk::WriteDescriptorSet{
+          .dstSet           = nullptr,
+          .dstBinding       = binding++,
+          .descriptorCount  = 1,
+          .descriptorType   = vk::DescriptorType::eStorageBuffer,
+          .pBufferInfo      = &bufferInfos.back()
+        });
+
+        break;
+      case Invalid:
+        Log::warn("invalid RID given as a descriptor");
+        return RID();
+      default:
+        Log::warn("non-buffer/image/sampler RID given as a descriptor");
+        return RID();
+    }
+  }
+
+  vk::DescriptorSetLayoutCreateInfo layoutCreateInfo{
+    .bindingCount = static_cast<unsigned int>(bindings.size()),
+    .pBindings    = bindings.data(),
+  };
+
+  DescriptorSetHandle * set = new DescriptorSetHandle;
+  set->layout = m_context->device().createDescriptorSetLayout(layoutCreateInfo);
+
+  vk::DescriptorPoolCreateInfo poolCreateInfo{
+    .maxSets        = 1,
+    .poolSizeCount  = static_cast<unsigned int>(poolSizes.size()),
+    .pPoolSizes     = poolSizes.data(),
+  };
+
+  set->pool = m_context->device().createDescriptorPool(poolCreateInfo);
+
+  vk::DescriptorSetAllocateInfo allocateInfo{
+    .descriptorPool     = set->pool,
+    .descriptorSetCount = 1,
+    .pSetLayouts        = &set->layout
+  };
+
+  set->set = m_context->device().allocateDescriptorSets(allocateInfo)[0];
+
+  for (auto& write : writes)
+    write.dstSet = set->set;
+
+  m_context->device().updateDescriptorSets(writes, nullptr);
+
+  RID rid(m_nextRID++, ResourceType::DescriptorSet);
+  m_resources[rid] = reinterpret_cast<unsigned long>(set);
+
+  return rid;
+}
+
+void Engine::destroy_descriptor_set(RID& rid) {
+  if (!rid.is_valid()) {
+    Log::warn("tried to destroy descriptor set of invalid RID");
+    return;
+  }
+
+  if (rid.m_type != ResourceType::DescriptorSet) {
+    Log::warn("tried to detroy descriptor set of non-descripor-set RID");
+    return;
+  }
+
+  DescriptorSetHandle * set = reinterpret_cast<DescriptorSetHandle *>(m_resources.at(rid));
+  m_context->device().destroyDescriptorSetLayout(set->layout);
+  m_context->device().destroyDescriptorPool(set->pool);
+  delete set;
+
+  m_resources.erase(rid);
+
+  rid.invalidate();
+}
+
+RID Engine::create_compute_pipeline(const RID& shader, const RID& descriptorSet) {
+  if (!shader.is_valid()) {
+    Log::warn("tried to make compute pipeline with invalid RID");
+    return RID();
+  }
+
+  if (shader.m_type != ResourceType::Shader) {
+    Log::warn("tried to make compute pipeline with non-shader RID");
+    return RID();
+  }
+
+  if (!descriptorSet.is_valid()) {
+    Log::warn("tried to make compute pipeline with invalid descriptor set");
+    return RID();
+  }
+
+  if (descriptorSet.m_type != ResourceType::DescriptorSet) {
+    Log::warn("tried to make compute pipeline with non-descriptor-set RID");
+    return RID();
+  }
+
+  vk::PipelineShaderStageCreateInfo shaderStage{
+    .stage  = vk::ShaderStageFlagBits::eCompute,
+    .module = reinterpret_cast<VkShaderModule>(m_resources.at(shader)),
+    .pName  = "main"
+  };
+
+  DescriptorSetHandle * set = reinterpret_cast<DescriptorSetHandle *>(m_resources.at(descriptorSet));
+
+  vk::PipelineLayoutCreateInfo layoutCreateInfo{
+    .setLayoutCount = 0,
+    .pSetLayouts    = &set->layout
+  };
+
+  PipelineHandle * pipeline = new PipelineHandle;
+  pipeline->layout = m_context->device().createPipelineLayout(layoutCreateInfo);
+
+  vk::ComputePipelineCreateInfo pipelineCreateInfo{
+    .stage  = shaderStage,
+    .layout = pipeline->layout
+  };
+
+  vk::ResultValue<vk::Pipeline> result = m_context->device().createComputePipeline(nullptr, pipelineCreateInfo);
+  if (!result.has_value()) {
+    Log::warn("failed to create compute pipeline");
+
+    m_context->device().destroyPipelineLayout(pipeline->layout);
+    delete pipeline;
+
+    return RID();
+  }
+
+  pipeline->pipeline = result.value;
+
+  RID rid(m_nextRID++, ResourceType::Pipeline);
+  m_resources[rid] = reinterpret_cast<unsigned long>(pipeline);
+
+  return rid;
+}
+
+RID Engine::create_graphics_pipeline(const GraphicsPipelineShaders& shaders, const RID& descriptorSet, const GraphicsPipelineSettings& s) {
+  std::vector<vk::PipelineShaderStageCreateInfo> shaderStages = getShaderStages(shaders);
+  if (shaderStages.empty()) return RID();
+
+  if (!descriptorSet.is_valid()) {
+    Log::warn("tried to create graphics pipeline with invalid descriptor set RID");
+    return RID();
+  }
+
+  if (descriptorSet.m_type != ResourceType::DescriptorSet) {
+    Log::warn("tried to create graphics pipeline with non-descriptor-set RID");
+    return RID();
+  }
+
+  DescriptorSetHandle * set = reinterpret_cast<DescriptorSetHandle *>(m_resources.at(descriptorSet));
+
+  vk::PipelineLayoutCreateInfo layoutCreateInfo{
+    .setLayoutCount = 1,
+    .pSetLayouts    = &set->layout
+  };
+
+  PipelineHandle * pipeline = new PipelineHandle;
+  pipeline->layout = m_context->device().createPipelineLayout(layoutCreateInfo);
+
+  std::array<vk::DynamicState, 2> dynamicStates = {
+    vk::DynamicState::eViewport,
+    vk::DynamicState::eScissor
+  };
+
+  vk::PipelineDynamicStateCreateInfo dynamicStateCreateInfo{
+    .dynamicStateCount  = 2,
+    .pDynamicStates     = dynamicStates.data()
+  };
+
+  vk::PipelineViewportStateCreateInfo viewportStateCreateInfo{
+    .viewportCount  = 1,
+    .scissorCount   = 1
+  };
+
+  vk::PipelineVertexInputStateCreateInfo vertexInputCreateInfo{
+    .vertexBindingDescriptionCount    = static_cast<unsigned int>(s.vertex_bindings.size()),
+    .pVertexBindingDescriptions       = s.vertex_bindings.data(),
+    .vertexAttributeDescriptionCount  = static_cast<unsigned int>(s.vertex_attributes.size()),
+    .pVertexAttributeDescriptions     = s.vertex_attributes.data()
+  };
+
+  vk::PipelineInputAssemblyStateCreateInfo assemblyCreateInfo{
+    .topology               = vk::PrimitiveTopology::eTriangleList,
+    .primitiveRestartEnable = false
+  };
+
+  vk::PipelineRasterizationStateCreateInfo rasterizerCreateInfo{
+    .depthClampEnable         = false,
+    .rasterizerDiscardEnable  = false,
+    .polygonMode              = s.polygon_mode,
+    .cullMode                 = s.cull_mode,
+    .frontFace                = s.front_face,
+    .depthBiasEnable          = false,
+    .lineWidth                = 1.0f
+  };
+
+  vk::PipelineMultisampleStateCreateInfo multisampleCreateInfo{
+    .rasterizationSamples = vk::SampleCountFlagBits::e1,
+    .sampleShadingEnable  = false
+  };
+
+  vk::PipelineDepthStencilStateCreateInfo depthCreateInfo{
+    .depthTestEnable        = s.enable_depth,
+    .depthWriteEnable       = s.enable_depth,
+    .depthCompareOp         = vk::CompareOp::eLess,
+    .depthBoundsTestEnable  = false,
+    .stencilTestEnable      = false
+  };
+
+  vk::PipelineColorBlendAttachmentState colorAttachmentState{
+    .blendEnable          = s.enable_blend,
+    .srcColorBlendFactor  = vk::BlendFactor::eSrcAlpha,
+    .dstColorBlendFactor  = vk::BlendFactor::eOneMinusSrcAlpha,
+    .colorBlendOp         = vk::BlendOp::eAdd,
+    .srcAlphaBlendFactor  = vk::BlendFactor::eOneMinusSrcAlpha,
+    .alphaBlendOp         = vk::BlendOp::eAdd,
+    .colorWriteMask       = vk::ColorComponentFlagBits::eR |
+                            vk::ColorComponentFlagBits::eG |
+                            vk::ColorComponentFlagBits::eB |
+                            vk::ColorComponentFlagBits::eA
+  };
+
+  vk::PipelineColorBlendStateCreateInfo blendStateCreateInfo{
+    .logicOpEnable    = false,
+    .attachmentCount  = 1,
+    .pAttachments     = &colorAttachmentState
+  };
+
+  vk::PipelineRenderingCreateInfo renderingCreateInfo{
+    .colorAttachmentCount     = 1,
+    .pColorAttachmentFormats  = &m_settings.color_format,
+    .depthAttachmentFormat    = m_settings.depth_format
+  };
+
+  vk::GraphicsPipelineCreateInfo pipelineCreateInfo{
+    .pNext                = &renderingCreateInfo,
+    .stageCount           = static_cast<unsigned int>(shaderStages.size()),
+    .pStages              = shaderStages.data(),
+    .pVertexInputState    = &vertexInputCreateInfo,
+    .pInputAssemblyState  = &assemblyCreateInfo,
+    .pViewportState       = &viewportStateCreateInfo,
+    .pRasterizationState  = &rasterizerCreateInfo,
+    .pMultisampleState    = &multisampleCreateInfo,
+    .pDepthStencilState   = &depthCreateInfo,
+    .pColorBlendState     = &blendStateCreateInfo,
+    .pDynamicState        = &dynamicStateCreateInfo,
+    .layout               = pipeline->layout
+  };
+
+  vk::ResultValue<vk::Pipeline> result = m_context->device().createGraphicsPipeline(nullptr, pipelineCreateInfo);
+  if (!result.has_value()) {
+    Log::warn("failed to create graphics pipeline");
+
+    m_context->device().destroyPipelineLayout(pipeline->layout);
+    delete pipeline;
+
+    return RID();
+  }
+
+  pipeline->pipeline = result.value;
+
+  RID rid(m_nextRID++, ResourceType::Pipeline);
+  m_resources[rid] = reinterpret_cast<unsigned long>(pipeline);
+
+  return rid;
+}
+
+void Engine::destroy_pipeline(RID& rid) {
+  if (!rid.is_valid()) {
+    Log::warn("tried to destroy invalid pipeline RID");
+    return;
+  }
+
+  if (rid.m_type != ResourceType::Pipeline) {
+    Log::warn("tried to destroy pipeline of non-pipeline resource");
+    return;
+  }
+
+  PipelineHandle * pipeline = reinterpret_cast<PipelineHandle *>(m_resources.at(rid));
+
+  m_context->device().destroyPipelineLayout(pipeline->layout);
+  m_context->device().destroyPipeline(pipeline->pipeline);
+  delete pipeline;
+
+  m_resources.erase(rid);
+
+  rid.invalidate();
+}
+
+std::vector<vk::PipelineShaderStageCreateInfo> Engine::getShaderStages(const GraphicsPipelineShaders& shaders) const {
+  if (!shaders.vertex.is_valid()) {
+    Log::warn("invalid vertex shader RID");
+    return {};
+  }
+
+  if (shaders.vertex.m_type != ResourceType::Shader) {
+    Log::warn("vertex RID is not a shader RID");
+    return {};
+  }
+
+  if (!shaders.fragment.is_valid()) {
+    Log::warn("invalid fragment shader RID");
+    return {};
+  }
+
+  if (shaders.fragment.m_type != ResourceType::Shader) {
+    Log::warn("fragment RID is not a shader RID");
+    return {};
+  }
+
+  if (shaders.tesselation_control.is_valid() && !shaders.tesselation_evaluation.is_valid()) {
+    Log::warn("found valid tesselation control shader RID but invalid tesselation evaluation shader RID");
+    return {};
+  }
+
+  if (shaders.tesselation_control.is_valid() && shaders.tesselation_control.m_type != ResourceType::Shader) {
+    Log::warn("tesselation control RID is not a shader RID");
+    return {};
+  }
+
+  if (shaders.tesselation_evaluation.is_valid() && shaders.tesselation_evaluation.m_type != ResourceType::Shader) {
+    Log::warn("tesselation evaluation RID is not a shader RID");
+    return {};
+  }
+
+  std::unordered_map<vk::ShaderStageFlagBits, vk::ShaderModule> modules;
+  modules.emplace(vk::ShaderStageFlagBits::eVertex, reinterpret_cast<VkShaderModule>(m_resources.at(shaders.vertex)));
+  modules.emplace(vk::ShaderStageFlagBits::eFragment, reinterpret_cast<VkShaderModule>(m_resources.at(shaders.fragment)));
+
+  if (shaders.tesselation_control.is_valid())
+    modules.emplace(vk::ShaderStageFlagBits::eTessellationControl, reinterpret_cast<VkShaderModule>(m_resources.at(shaders.tesselation_evaluation)));
+
+  if (shaders.tesselation_control.is_valid())
+    modules.emplace(vk::ShaderStageFlagBits::eTessellationEvaluation, reinterpret_cast<VkShaderModule>(m_resources.at(shaders.tesselation_evaluation)));
+
+  std::vector<vk::PipelineShaderStageCreateInfo> stages = {};
+  for (const auto& [stage, module] : modules) {
+    stages.emplace_back(vk::PipelineShaderStageCreateInfo{
+      .stage  = stage,
+      .module = module,
+      .pName  = "main"
+    });
+  }
+
+  return stages;
 }
 
 void Engine::updateTimes() {

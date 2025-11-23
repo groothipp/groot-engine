@@ -2,11 +2,12 @@
 
 #include "src/include/rid.hpp"
 #include "src/include/shader_compiler.hpp"
+#include "vulkan/vulkan.hpp"
 
 #include <string>
 #include <unordered_map>
 #include <functional>
-#include <shaderc/shaderc.hpp>
+#include <vulkan/vulkan.hpp>
 
 class GLFWwindow;
 
@@ -23,10 +24,40 @@ struct Settings {
   std::string window_title = "Groot Engine Application";
   unsigned int gpu_index = 0;
   double time_step = 1.0 / 60.0;
+  vk::Format color_format = vk::Format::eB8G8R8A8Srgb;
+  vk::Format depth_format = vk::Format::eD32Sfloat;
+};
+
+struct GraphicsPipelineShaders {
+  RID vertex = RID();
+  RID fragment = RID();
+  RID tesselation_control = RID();
+  RID tesselation_evaluation = RID();
+};
+
+struct GraphicsPipelineSettings {
+  std::vector<vk::VertexInputBindingDescription> vertex_bindings = {};
+  std::vector<vk::VertexInputAttributeDescription> vertex_attributes = {};
+  vk::PolygonMode polygon_mode = vk::PolygonMode::eFill;
+  vk::CullModeFlags cull_mode = vk::CullModeFlagBits::eBack;
+  vk::FrontFace front_face = vk::FrontFace::eCounterClockwise;
+  bool enable_depth = true;
+  bool enable_blend = true;
+};
+
+struct DescriptorSetHandle {
+  vk::DescriptorSetLayout layout = nullptr;
+  vk::DescriptorPool pool = nullptr;
+  vk::DescriptorSet set = nullptr;
+};
+
+struct PipelineHandle {
+  vk::PipelineLayout layout = nullptr;
+  vk::Pipeline pipeline = nullptr;
 };
 
 class Engine {
-  Settings m_settings;
+  Settings m_settings = Settings{};
   GLFWwindow * m_window = nullptr;
   VulkanContext * m_context = nullptr;
   Allocator * m_allocator = nullptr;
@@ -59,7 +90,16 @@ class Engine {
     RID compile_shader(ShaderType type, const std::string&);
     void destroy_shader(RID&);
 
+    RID create_descriptor_set(const std::vector<RID>&);
+    void destroy_descriptor_set(RID&);
+
+    RID create_compute_pipeline(const RID&, const RID&);
+    RID create_graphics_pipeline(const GraphicsPipelineShaders&, const RID&, const GraphicsPipelineSettings&);
+    void destroy_pipeline(RID&);
+
   private:
+    std::vector<vk::PipelineShaderStageCreateInfo> getShaderStages(const GraphicsPipelineShaders&) const;
+
     void updateTimes();
 };
 
