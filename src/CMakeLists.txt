@@ -7,9 +7,11 @@ find_library(SHADERC_LIB shaderc_combined REQUIRED)
 set(ENGINE_INCLUDES
   ${CMAKE_CURRENT_SOURCE_DIR}/include/allocator.hpp
   ${CMAKE_CURRENT_SOURCE_DIR}/include/engine.hpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/enums.hpp
   ${CMAKE_CURRENT_SOURCE_DIR}/include/log.hpp
   ${CMAKE_CURRENT_SOURCE_DIR}/include/rid.hpp
   ${CMAKE_CURRENT_SOURCE_DIR}/include/shader_compiler.hpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/structs.hpp
   ${CMAKE_CURRENT_SOURCE_DIR}/include/vulkan_context.hpp
 )
 

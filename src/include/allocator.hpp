@@ -1,6 +1,8 @@
 #pragma once
 
-#include <vulkan/vulkan_raii.hpp>
+#include "src/include/structs.hpp"
+
+#include <vulkan/vulkan.hpp>
 #include <vk_mem_alloc.h>
 
 #include <unordered_map>
@@ -8,10 +10,6 @@
 namespace groot {
 
 class VulkanContext;
-
-struct VkBufferHash {
-  size_t operator()(VkBuffer) const;
-};
 
 class Allocator {
   VmaAllocator m_allocator = nullptr;

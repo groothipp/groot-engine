@@ -1,8 +1,8 @@
 #pragma once
 
+#include "src/include/enums.hpp"
 #include "src/include/rid.hpp"
-#include "src/include/shader_compiler.hpp"
-#include "vulkan/vulkan.hpp"
+#include "src/include/structs.hpp"
 
 #include <string>
 #include <unordered_map>
@@ -16,45 +16,6 @@ namespace groot {
 class Allocator;
 class VulkanContext;
 class ShaderCompiler;
-
-struct Settings {
-  std::string application_name = "Groot Engine Application";
-  unsigned int application_version = 1;
-  std::pair<unsigned int, unsigned int> window_size = std::make_pair(1280, 720);
-  std::string window_title = "Groot Engine Application";
-  unsigned int gpu_index = 0;
-  double time_step = 1.0 / 60.0;
-  vk::Format color_format = vk::Format::eB8G8R8A8Srgb;
-  vk::Format depth_format = vk::Format::eD32Sfloat;
-};
-
-struct GraphicsPipelineShaders {
-  RID vertex = RID();
-  RID fragment = RID();
-  RID tesselation_control = RID();
-  RID tesselation_evaluation = RID();
-};
-
-struct GraphicsPipelineSettings {
-  std::vector<vk::VertexInputBindingDescription> vertex_bindings = {};
-  std::vector<vk::VertexInputAttributeDescription> vertex_attributes = {};
-  vk::PolygonMode polygon_mode = vk::PolygonMode::eFill;
-  vk::CullModeFlags cull_mode = vk::CullModeFlagBits::eBack;
-  vk::FrontFace front_face = vk::FrontFace::eCounterClockwise;
-  bool enable_depth = true;
-  bool enable_blend = true;
-};
-
-struct DescriptorSetHandle {
-  vk::DescriptorSetLayout layout = nullptr;
-  vk::DescriptorPool pool = nullptr;
-  vk::DescriptorSet set = nullptr;
-};
-
-struct PipelineHandle {
-  vk::PipelineLayout layout = nullptr;
-  vk::Pipeline pipeline = nullptr;
-};
 
 class Engine {
   Settings m_settings = Settings{};
@@ -98,8 +59,6 @@ class Engine {
     void destroy_pipeline(RID&);
 
   private:
-    std::vector<vk::PipelineShaderStageCreateInfo> getShaderStages(const GraphicsPipelineShaders&) const;
-
     void updateTimes();
 };
 

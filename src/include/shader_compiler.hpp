@@ -1,16 +1,10 @@
 #pragma once
 
+#include "src/include/enums.hpp"
+
 #include <shaderc/shaderc.hpp>
 
 namespace groot {
-
-enum ShaderType {
-  Vertex,
-  Fragment,
-  TesselationControl,
-  TesselationEvaluation,
-  Compute
-};
 
 class ShaderCompiler {
   shaderc::Compiler m_compiler;

@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 4.2)
 
 set(GROOT_VERSION_MAJOR 2)
-set(GROOT_VERSION_MINOR 28)
+set(GROOT_VERSION_MINOR 30)
 set(GROOT_VERSION_PATCH 0)
 
 project(GrootEngine

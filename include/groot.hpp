@@ -1,8 +1,5 @@
 #pragma once
 
-#define VULKAN_HPP_NO_CONSTRUCTORS
-#include <vulkan/vulkan.hpp>
-
 #include <functional>
 #include <string>
 #include <unordered_map>
@@ -32,6 +29,94 @@ enum ResourceType {
   StorageBuffer
 };
 
+enum class Format {
+  undefined           = 0,
+  r8_unorm            = 9,
+  r8_snorm            = 10,
+  r8_uint             = 13,
+  r8_sint             = 14,
+  rg8_unorm           = 16,
+  rg8_snorm           = 17,
+  rg8_uint            = 20,
+  rg8_sint            = 21,
+  rgba8_unorm         = 37,
+  rgba8_snorm         = 38,
+  rgba8_uint          = 41,
+  rgba8_sint          = 42,
+  rgba8_srgb          = 43,
+  bgra8_unorm         = 44,
+  bgra8_srgb          = 50,
+  r16_unorm           = 70,
+  r16_snorm           = 71,
+  r16_uint            = 74,
+  r16_sint            = 75,
+  r16_sfloat          = 76,
+  rg16_unorm          = 77,
+  rg16_snorm          = 78,
+  rg16_uint           = 81,
+  rg16_sint           = 82,
+  rg16_sfloat         = 83,
+  rgba16_unorm        = 91,
+  rgba16_snorm        = 92,
+  rgba16_uint         = 95,
+  rgba16_sint         = 96,
+  rgba16_sfloat       = 97,
+  r32_uint            = 98,
+  r32_sint            = 99,
+  r32_sfloat          = 100,
+  rg32_uint           = 101,
+  rg32_sint           = 102,
+  rg32_sfloat         = 103,
+  rgb32_uint          = 104,
+  rgb32_sint          = 105,
+  rgb32_sfloat        = 106,
+  rgba32_uint         = 107,
+  rgba32_sint         = 108,
+  rgba32_sfloat       = 109,
+  d16_unorm           = 124,
+  d32_sfloat          = 126,
+  d24_unorm_s8_uint   = 129,
+  d32_sfloat_s8_uint  = 130,
+  bc1_rgb_unorm       = 131,
+  bc1_rgb_srgb        = 132,
+  bc1_rgba_unorm      = 133,
+  bc1_rgba_srgb       = 134,
+  bc2_unorm           = 135,
+  bc2_srgb            = 136,
+  bc3_unorm           = 137,
+  bc3_srgb            = 138,
+  bc4_unorm           = 139,
+  bc4_snorm           = 140,
+  bc5_unorm           = 141,
+  bc5_snorm           = 142,
+  bc6h_ufloat         = 143,
+  bc6h_sfloat         = 144,
+  bc7_unorm           = 145,
+  bc7_srgb            = 146
+};
+
+enum InputRate {
+  VertexRate,
+  InstanceRate
+};
+
+enum MeshType {
+  Solid,
+  Wireframe,
+  Vertices
+};
+
+enum CullMode {
+  None,
+  Front,
+  Back
+};
+
+enum DrawDirection {
+  CounterClockwise,
+  Clockwise
+};
+
 struct Settings {
   std::string application_name = "Groot Engine Application";
   unsigned int application_version = 1;
@@ -39,8 +124,8 @@ struct Settings {
   std::string window_title = "Groot Engine Application";
   unsigned int gpu_index = 0;
   double time_step = 1.0 / 60.0;
-  vk::Format color_format = vk::Format::eB8G8R8A8Srgb;
-  vk::Format depth_format = vk::Format::eD32Sfloat;
+  Format color_format = Format::rgba8_srgb;
+  Format depth_format = Format::d32_sfloat;
 };
 
 class RID {
@@ -81,12 +166,25 @@ struct GraphicsPipelineShaders {
   RID tesselation_evaluation = RID();
 };
 
+struct VertexBinding {
+  unsigned int binding = 0;
+  unsigned int stride = 0;
+  InputRate input_rate = InputRate::VertexRate;
+};
+
+struct VertexAttribute {
+  unsigned int location = 0;
+  unsigned int binding = 0;
+  Format format = Format::undefined;
+  unsigned int offset = 0;
+};
+
 struct GraphicsPipelineSettings {
-  std::vector<vk::VertexInputBindingDescription> vertex_bindings = {};
-  std::vector<vk::VertexInputAttributeDescription> vertex_attributes = {};
-  vk::PolygonMode polygon_mode = vk::PolygonMode::eFill;
-  vk::CullModeFlags cull_mode = vk::CullModeFlagBits::eBack;
-  vk::FrontFace front_face = vk::FrontFace::eCounterClockwise;
+  std::vector<VertexBinding> vertex_bindings = {};
+  std::vector<VertexAttribute> vertex_attributes = {};
+  MeshType mesh_type = MeshType::Solid;
+  CullMode cull_mode = CullMode::Back;
+  DrawDirection draw_direction = DrawDirection::CounterClockwise;
   bool enable_depth = true;
   bool enable_blend = true;
 };
@@ -133,8 +231,6 @@ class Engine {
     void destroy_pipeline(RID&);
 
   private:
-    std::vector<vk::PipelineShaderStageCreateInfo> getShaderStages(const GraphicsPipelineShaders&) const;
-
     void updateTimes();
 };
 

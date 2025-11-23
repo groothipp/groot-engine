@@ -1,17 +1,10 @@
 #pragma once
 
+#include "src/include/enums.hpp"
+
 #include <cstddef>
 
 namespace groot {
-
-enum ResourceType {
-  Invalid,
-  Shader,
-  Pipeline,
-  DescriptorSet,
-  UniformBuffer,
-  StorageBuffer
-};
 
 class RID {
   friend class Engine;

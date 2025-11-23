@@ -1,8 +1,9 @@
 #include "src/include/allocator.hpp"
 #include "src/include/engine.hpp"
 #include "src/include/log.hpp"
+#include "src/include/shader_compiler.hpp"
 #include "src/include/vulkan_context.hpp"
-#include "vulkan/vulkan.hpp"
+#include "vulkan/vulkan_core.h"
 
 #include <GLFW/glfw3.h>
 
@@ -388,8 +389,40 @@ RID Engine::create_compute_pipeline(const RID& shader, const RID& descriptorSet)
 }
 
 RID Engine::create_graphics_pipeline(const GraphicsPipelineShaders& shaders, const RID& descriptorSet, const GraphicsPipelineSettings& s) {
-  std::vector<vk::PipelineShaderStageCreateInfo> shaderStages = getShaderStages(shaders);
-  if (shaderStages.empty()) return RID();
+  if (!shaders.vertex.is_valid()) {
+    Log::warn("invalid vertex shader RID");
+    return {};
+  }
+
+  if (shaders.vertex.m_type != ResourceType::Shader) {
+    Log::warn("vertex RID is not a shader RID");
+    return {};
+  }
+
+  if (!shaders.fragment.is_valid()) {
+    Log::warn("invalid fragment shader RID");
+    return {};
+  }
+
+  if (shaders.fragment.m_type != ResourceType::Shader) {
+    Log::warn("fragment RID is not a shader RID");
+    return {};
+  }
+
+  if (shaders.tesselation_control.is_valid() && !shaders.tesselation_evaluation.is_valid()) {
+    Log::warn("found valid tesselation control shader RID but invalid tesselation evaluation shader RID");
+    return {};
+  }
+
+  if (shaders.tesselation_control.is_valid() && shaders.tesselation_control.m_type != ResourceType::Shader) {
+    Log::warn("tesselation control RID is not a shader RID");
+    return {};
+  }
+
+  if (shaders.tesselation_evaluation.is_valid() && shaders.tesselation_evaluation.m_type != ResourceType::Shader) {
+    Log::warn("tesselation evaluation RID is not a shader RID");
+    return {};
+  }
 
   if (!descriptorSet.is_valid()) {
     Log::warn("tried to create graphics pipeline with invalid descriptor set RID");
@@ -399,6 +432,25 @@ RID Engine::create_graphics_pipeline(const GraphicsPipelineShaders& shaders, con
   if (descriptorSet.m_type != ResourceType::DescriptorSet) {
     Log::warn("tried to create graphics pipeline with non-descriptor-set RID");
     return RID();
+  }
+
+  std::unordered_map<vk::ShaderStageFlagBits, vk::ShaderModule> modules;
+  modules.emplace(vk::ShaderStageFlagBits::eVertex, reinterpret_cast<VkShaderModule>(m_resources.at(shaders.vertex)));
+  modules.emplace(vk::ShaderStageFlagBits::eFragment, reinterpret_cast<VkShaderModule>(m_resources.at(shaders.fragment)));
+
+  if (shaders.tesselation_control.is_valid())
+    modules.emplace(vk::ShaderStageFlagBits::eTessellationControl, reinterpret_cast<VkShaderModule>(m_resources.at(shaders.tesselation_evaluation)));
+
+  if (shaders.tesselation_control.is_valid())
+    modules.emplace(vk::ShaderStageFlagBits::eTessellationEvaluation, reinterpret_cast<VkShaderModule>(m_resources.at(shaders.tesselation_evaluation)));
+
+  std::vector<vk::PipelineShaderStageCreateInfo> stages = {};
+  for (const auto& [stage, module] : modules) {
+    stages.emplace_back(vk::PipelineShaderStageCreateInfo{
+      .stage  = stage,
+      .module = module,
+      .pName  = "main"
+    });
   }
 
   DescriptorSetHandle * set = reinterpret_cast<DescriptorSetHandle *>(m_resources.at(descriptorSet));
@@ -428,9 +480,9 @@ RID Engine::create_graphics_pipeline(const GraphicsPipelineShaders& shaders, con
 
   vk::PipelineVertexInputStateCreateInfo vertexInputCreateInfo{
     .vertexBindingDescriptionCount    = static_cast<unsigned int>(s.vertex_bindings.size()),
-    .pVertexBindingDescriptions       = s.vertex_bindings.data(),
+    .pVertexBindingDescriptions       = reinterpret_cast<const vk::VertexInputBindingDescription *>(s.vertex_bindings.data()),
     .vertexAttributeDescriptionCount  = static_cast<unsigned int>(s.vertex_attributes.size()),
-    .pVertexAttributeDescriptions     = s.vertex_attributes.data()
+    .pVertexAttributeDescriptions     = reinterpret_cast<const vk::VertexInputAttributeDescription *>(s.vertex_attributes.data())
   };
 
   vk::PipelineInputAssemblyStateCreateInfo assemblyCreateInfo{
@@ -441,9 +493,9 @@ RID Engine::create_graphics_pipeline(const GraphicsPipelineShaders& shaders, con
   vk::PipelineRasterizationStateCreateInfo rasterizerCreateInfo{
     .depthClampEnable         = false,
     .rasterizerDiscardEnable  = false,
-    .polygonMode              = s.polygon_mode,
-    .cullMode                 = s.cull_mode,
-    .frontFace                = s.front_face,
+    .polygonMode              = static_cast<vk::PolygonMode>(s.mesh_type),
+    .cullMode                 = static_cast<vk::CullModeFlagBits>(s.cull_mode),
+    .frontFace                = static_cast<vk::FrontFace>(s.draw_direction),
     .depthBiasEnable          = false,
     .lineWidth                = 1.0f
   };
@@ -482,14 +534,14 @@ RID Engine::create_graphics_pipeline(const GraphicsPipelineShaders& shaders, con
 
   vk::PipelineRenderingCreateInfo renderingCreateInfo{
     .colorAttachmentCount     = 1,
-    .pColorAttachmentFormats  = &m_settings.color_format,
-    .depthAttachmentFormat    = m_settings.depth_format
+    .pColorAttachmentFormats  = reinterpret_cast<vk::Format *>(&m_settings.color_format),
+    .depthAttachmentFormat    = static_cast<vk::Format>(m_settings.depth_format)
   };
 
   vk::GraphicsPipelineCreateInfo pipelineCreateInfo{
     .pNext                = &renderingCreateInfo,
-    .stageCount           = static_cast<unsigned int>(shaderStages.size()),
-    .pStages              = shaderStages.data(),
+    .stageCount           = static_cast<unsigned int>(stages.size()),
+    .pStages              = stages.data(),
     .pVertexInputState    = &vertexInputCreateInfo,
     .pInputAssemblyState  = &assemblyCreateInfo,
     .pViewportState       = &viewportStateCreateInfo,
@@ -539,64 +591,6 @@ void Engine::destroy_pipeline(RID& rid) {
   m_resources.erase(rid);
 
   rid.invalidate();
-}
-
-std::vector<vk::PipelineShaderStageCreateInfo> Engine::getShaderStages(const GraphicsPipelineShaders& shaders) const {
-  if (!shaders.vertex.is_valid()) {
-    Log::warn("invalid vertex shader RID");
-    return {};
-  }
-
-  if (shaders.vertex.m_type != ResourceType::Shader) {
-    Log::warn("vertex RID is not a shader RID");
-    return {};
-  }
-
-  if (!shaders.fragment.is_valid()) {
-    Log::warn("invalid fragment shader RID");
-    return {};
-  }
-
-  if (shaders.fragment.m_type != ResourceType::Shader) {
-    Log::warn("fragment RID is not a shader RID");
-    return {};
-  }
-
-  if (shaders.tesselation_control.is_valid() && !shaders.tesselation_evaluation.is_valid()) {
-    Log::warn("found valid tesselation control shader RID but invalid tesselation evaluation shader RID");
-    return {};
-  }
-
-  if (shaders.tesselation_control.is_valid() && shaders.tesselation_control.m_type != ResourceType::Shader) {
-    Log::warn("tesselation control RID is not a shader RID");
-    return {};
-  }
-
-  if (shaders.tesselation_evaluation.is_valid() && shaders.tesselation_evaluation.m_type != ResourceType::Shader) {
-    Log::warn("tesselation evaluation RID is not a shader RID");
-    return {};
-  }
-
-  std::unordered_map<vk::ShaderStageFlagBits, vk::ShaderModule> modules;
-  modules.emplace(vk::ShaderStageFlagBits::eVertex, reinterpret_cast<VkShaderModule>(m_resources.at(shaders.vertex)));
-  modules.emplace(vk::ShaderStageFlagBits::eFragment, reinterpret_cast<VkShaderModule>(m_resources.at(shaders.fragment)));
-
-  if (shaders.tesselation_control.is_valid())
-    modules.emplace(vk::ShaderStageFlagBits::eTessellationControl, reinterpret_cast<VkShaderModule>(m_resources.at(shaders.tesselation_evaluation)));
-
-  if (shaders.tesselation_control.is_valid())
-    modules.emplace(vk::ShaderStageFlagBits::eTessellationEvaluation, reinterpret_cast<VkShaderModule>(m_resources.at(shaders.tesselation_evaluation)));
-
-  std::vector<vk::PipelineShaderStageCreateInfo> stages = {};
-  for (const auto& [stage, module] : modules) {
-    stages.emplace_back(vk::PipelineShaderStageCreateInfo{
-      .stage  = stage,
-      .module = module,
-      .pName  = "main"
-    });
-  }
-
-  return stages;
 }
 
 void Engine::updateTimes() {
