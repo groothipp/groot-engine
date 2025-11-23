@@ -88,8 +88,12 @@ const vk::Device& VulkanContext::device() const {
   return m_device;
 }
 
-const bool& VulkanContext::supportsTesselation() const {
-  return m_tesselationSupport;
+bool VulkanContext::supportsTesselation() const {
+  return m_gpu.getFeatures().tessellationShader;
+}
+
+bool VulkanContext::supportsNonSolidMesh() const {
+  return m_gpu.getFeatures().fillModeNonSolid;
 }
 
 void VulkanContext::createSurface(GLFWwindow * window) {
@@ -117,14 +121,14 @@ void VulkanContext::chooseGPU(const unsigned int& gpuIndex, const std::vector<co
   if (extensionErrors != "")
     Log::runtime_error(std::format("GPU does not support the following extensions:{}", extensionErrors));
 
-  vk::PhysicalDeviceFeatures gpuFeatures = gpus[gpuIndex].getFeatures();
-
-  if (!gpuFeatures.tessellationShader)
+  if (!gpus[gpuIndex].getFeatures().tessellationShader)
     Log::warn("GPU does not support tesselation shaders");
+
+  if (!gpus[gpuIndex].getFeatures().fillModeNonSolid)
+    Log::warn("GPU does not support non-solid mesh types");
 
   m_gpu = gpus[gpuIndex];
   m_queueFamilyIndices = getQueueFamilyIndices();
-  m_tesselationSupport = gpuFeatures.tessellationShader;
 }
 
 void VulkanContext::createDevice(std::vector<const char *>& extensions) {
@@ -141,7 +145,8 @@ void VulkanContext::createDevice(std::vector<const char *>& extensions) {
   }
 
   vk::PhysicalDeviceFeatures features{
-    .tessellationShader = m_tesselationSupport
+    .tessellationShader = m_gpu.getFeatures().tessellationShader,
+    .fillModeNonSolid   = m_gpu.getFeatures().fillModeNonSolid
   };
 
   vk::PhysicalDeviceDynamicRenderingFeatures dynamicRenderingFeature{

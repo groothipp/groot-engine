@@ -424,6 +424,10 @@ RID Engine::create_graphics_pipeline(const GraphicsPipelineShaders& shaders, con
     return {};
   }
 
+  if ((shaders.tesselation_control.is_valid() || shaders.tesselation_evaluation.is_valid()) && !m_context->supportsTesselation()) {
+    Log::warn("tesselation shaders are not supported on this GPU and will be skipped during pipeline creation");
+  }
+
   if (!descriptorSet.is_valid()) {
     Log::warn("tried to create graphics pipeline with invalid descriptor set RID");
     return RID();
@@ -438,10 +442,10 @@ RID Engine::create_graphics_pipeline(const GraphicsPipelineShaders& shaders, con
   modules.emplace(vk::ShaderStageFlagBits::eVertex, reinterpret_cast<VkShaderModule>(m_resources.at(shaders.vertex)));
   modules.emplace(vk::ShaderStageFlagBits::eFragment, reinterpret_cast<VkShaderModule>(m_resources.at(shaders.fragment)));
 
-  if (shaders.tesselation_control.is_valid())
+  if (shaders.tesselation_control.is_valid() && m_context->supportsTesselation())
     modules.emplace(vk::ShaderStageFlagBits::eTessellationControl, reinterpret_cast<VkShaderModule>(m_resources.at(shaders.tesselation_evaluation)));
 
-  if (shaders.tesselation_control.is_valid())
+  if (shaders.tesselation_control.is_valid() && m_context->supportsTesselation())
     modules.emplace(vk::ShaderStageFlagBits::eTessellationEvaluation, reinterpret_cast<VkShaderModule>(m_resources.at(shaders.tesselation_evaluation)));
 
   std::vector<vk::PipelineShaderStageCreateInfo> stages = {};
@@ -490,10 +494,17 @@ RID Engine::create_graphics_pipeline(const GraphicsPipelineShaders& shaders, con
     .primitiveRestartEnable = false
   };
 
+
+  vk::PolygonMode polygonMode = static_cast<vk::PolygonMode>(s.mesh_type);
+  if (s.mesh_type != MeshType::Solid && !m_context->supportsNonSolidMesh()) {
+    Log::warn("setting pipeline mesh type to solid. GPU does not support non solid meshes");
+    polygonMode = vk::PolygonMode::eFill;
+  }
+
   vk::PipelineRasterizationStateCreateInfo rasterizerCreateInfo{
     .depthClampEnable         = false,
     .rasterizerDiscardEnable  = false,
-    .polygonMode              = static_cast<vk::PolygonMode>(s.mesh_type),
+    .polygonMode              = polygonMode,
     .cullMode                 = static_cast<vk::CullModeFlagBits>(s.cull_mode),
     .frontFace                = static_cast<vk::FrontFace>(s.draw_direction),
     .depthBiasEnable          = false,

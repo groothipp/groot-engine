@@ -12,8 +12,6 @@ class VulkanContext {
   vk::PhysicalDevice m_gpu = nullptr;
   vk::Device m_device = nullptr;
 
-  bool m_tesselationSupport = false;
-
   unsigned int m_queueFamilyIndices = 0;
   vk::Queue m_graphicsQueue = nullptr;
   vk::Queue m_presentQueue = nullptr;
@@ -34,7 +32,8 @@ class VulkanContext {
     const vk::Instance& instance() const;
     const vk::PhysicalDevice& gpu() const;
     const vk::Device& device() const;
-    const bool& supportsTesselation() const;
+    bool supportsTesselation() const;
+    bool supportsNonSolidMesh() const;
 
     void createSurface(GLFWwindow *);
     void chooseGPU(const unsigned int&, const std::vector<const char *>&);
