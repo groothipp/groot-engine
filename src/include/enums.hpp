@@ -16,7 +16,8 @@ enum ResourceType {
   Pipeline,
   DescriptorSet,
   UniformBuffer,
-  StorageBuffer
+  StorageBuffer,
+  Image
 };
 
 enum class Format {

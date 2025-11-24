@@ -8,7 +8,11 @@
 namespace groot {
 
 struct VkBufferHash {
-  size_t operator()(VkBuffer) const;
+  std::size_t operator()(VkBuffer) const;
+};
+
+struct VkImageHash {
+  std::size_t operator()(VkImage) const;
 };
 
 struct Settings {
@@ -61,6 +65,11 @@ struct DescriptorSetHandle {
 struct PipelineHandle {
   vk::PipelineLayout layout = nullptr;
   vk::Pipeline pipeline = nullptr;
+};
+
+struct ImageHandle {
+  vk::Image image = nullptr;
+  vk::ImageView view = nullptr;
 };
 
 } // namespace groot

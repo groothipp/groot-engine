@@ -3,6 +3,7 @@
 #include "src/include/log.hpp"
 #include "src/include/shader_compiler.hpp"
 #include "src/include/vulkan_context.hpp"
+#include "vulkan/vulkan.hpp"
 #include "vulkan/vulkan_core.h"
 
 #include <GLFW/glfw3.h>
@@ -71,6 +72,15 @@ Engine::~Engine() {
       case ResourceType::StorageBuffer:
         m_allocator->destroyBuffer(reinterpret_cast<VkBuffer>(handle));
         break;
+      case ResourceType::Image: {
+        ImageHandle * image = reinterpret_cast<ImageHandle *>(handle);
+
+        m_context->device().destroyImageView(image->view);
+        m_allocator->destroyImage(image->image);
+        delete image;
+
+        break;
+      }
     }
   }
 
@@ -94,6 +104,11 @@ void Engine::run(std::function<void(double)> code) {
 }
 
 RID Engine::create_uniform_buffer(unsigned int size) {
+  if (size == 0) {
+    Log::warn("cannot create buffer with size 0");
+    return RID();
+  }
+
   vk::Buffer buffer = m_allocator->allocateBuffer(vk::BufferCreateInfo{
     .size         = size,
     .usage        = vk::BufferUsageFlagBits::eUniformBuffer,
@@ -107,6 +122,11 @@ RID Engine::create_uniform_buffer(unsigned int size) {
 }
 
 RID Engine::create_storage_buffer(unsigned int size) {
+  if (size == 0) {
+    Log::warn("cannot create buffer with size 0");
+    return RID();
+  }
+
   vk::Buffer buffer = m_allocator->allocateBuffer(vk::BufferCreateInfo{
     .size         = size,
     .usage        = vk::BufferUsageFlagBits::eStorageBuffer,
@@ -117,24 +137,6 @@ RID Engine::create_storage_buffer(unsigned int size) {
   m_resources[rid] = reinterpret_cast<unsigned long>(static_cast<VkBuffer>(buffer));
 
   return rid;
-}
-
-void Engine::update_buffer(const RID& rid, std::size_t size, void * data) const {
-  if (!rid.is_valid()) {
-    Log::warn("tried to update buffer with an invalid RID");
-    return;
-  }
-
-  if (rid.m_type != ResourceType::UniformBuffer && rid.m_type != ResourceType::StorageBuffer) {
-    Log::warn("tried to update buffer of a non-buffer resource");
-    return;
-  }
-
-  vk::Buffer buffer = reinterpret_cast<VkBuffer>(m_resources.at(rid));
-
-  void * map = m_allocator->mapBuffer(buffer);
-  std::memcpy(map, data, size);
-  m_allocator->unmapBuffer(buffer);
 }
 
 void Engine::destroy_buffer(RID& rid) {
@@ -150,6 +152,87 @@ void Engine::destroy_buffer(RID& rid) {
 
   vk::Buffer buffer = reinterpret_cast<VkBuffer>(m_resources.at(rid));
   m_allocator->destroyBuffer(buffer);
+  m_resources.erase(rid);
+
+  rid.invalidate();
+}
+
+RID Engine::create_storage_image(unsigned int width, unsigned int height, Format format) {
+  if (format == Format::undefined) {
+    Log::warn("tried to create storage image with undefined format");
+    return RID();
+  }
+
+  if (width == 0) {
+    Log::warn("tried to create storage image with width 0");
+    return RID();
+  }
+
+  if (height == 0) {
+    Log::warn("tried to create storage image with height 0");
+    return RID();
+  }
+
+  vk::ImageCreateInfo imageCreateInfo{
+    .imageType    = vk::ImageType::e2D,
+    .format       = static_cast<vk::Format>(format),
+    .extent       = vk::Extent3D{ width, height, 1 },
+    .mipLevels    = 1,
+    .arrayLayers  = 1,
+    .samples      = vk::SampleCountFlagBits::e1,
+    .tiling       = vk::ImageTiling::eOptimal,
+    .usage        = vk::ImageUsageFlagBits::eStorage,
+    .sharingMode  = vk::SharingMode::eExclusive
+  };
+
+  vk::Image image = m_allocator->allocateImage(imageCreateInfo);
+
+  vk::ImageViewCreateInfo viewCreateInfo{
+    .image = image,
+    .viewType = vk::ImageViewType::e2D,
+    .format = static_cast<vk::Format>(format),
+    .components = {
+      .r = vk::ComponentSwizzle::eIdentity,
+      .g = vk::ComponentSwizzle::eIdentity,
+      .b = vk::ComponentSwizzle::eIdentity,
+      .a = vk::ComponentSwizzle::eIdentity
+    },
+    .subresourceRange = {
+      .aspectMask = vk::ImageAspectFlagBits::eColor,
+      .levelCount = 1,
+      .layerCount = 1
+    }
+  };
+
+  vk::ImageView view = m_context->device().createImageView(viewCreateInfo);
+
+  ImageHandle * handle = new ImageHandle;
+  handle->image = image;
+  handle->view = view;
+
+  RID rid(m_nextRID++, ResourceType::Image);
+  m_resources[rid] = reinterpret_cast<unsigned long>(handle);
+
+  return rid;
+}
+
+void Engine::destroy_image(RID& rid) {
+  if (!rid.is_valid()) {
+    Log::warn("tried to destroy invalid image RID");
+    return;
+  }
+
+  if (rid.m_type != ResourceType::Image) {
+    Log::warn("tried to destroy image of non-image RID");
+    return;
+  }
+
+  ImageHandle * image = reinterpret_cast<ImageHandle *>(m_resources.at(rid));
+
+  m_context->device().destroyImageView(image->view);
+  m_allocator->destroyImage(image->image);
+  delete image;
+
   m_resources.erase(rid);
 
   rid.invalidate();
@@ -198,10 +281,13 @@ RID Engine::create_descriptor_set(const std::vector<RID>& descriptors) {
   std::vector<vk::DescriptorBufferInfo> bufferInfos;
   bufferInfos.reserve(descriptors.size());
 
+  std::vector<vk::DescriptorImageInfo> imageInfos;
+  imageInfos.reserve(descriptors.size());
+
   std::vector<vk::WriteDescriptorSet> writes;
 
   unsigned int binding = 0;
-  int uniformPoolIndex = -1, storagePoolIndex = -1;
+  int uniformPoolIndex = -1, storagePoolIndex = -1, imagePoolIndex = -1;
   std::vector<vk::DescriptorSetLayoutBinding> bindings = {};
   for (const auto& descriptor : descriptors) {
     switch (descriptor.m_type) {
@@ -263,6 +349,38 @@ RID Engine::create_descriptor_set(const std::vector<RID>& descriptors) {
         });
 
         break;
+      case Image: {
+        if (imagePoolIndex == -1) {
+          imagePoolIndex = poolSizes.size();
+          poolSizes.emplace_back(vk::DescriptorPoolSize{
+            .type = vk::DescriptorType::eStorageImage
+          });
+        }
+        ++poolSizes[imagePoolIndex].descriptorCount;
+
+        bindings.emplace_back(vk::DescriptorSetLayoutBinding{
+          .binding          = binding,
+          .descriptorType   = vk::DescriptorType::eStorageImage,
+          .descriptorCount  = 1
+        });
+
+        ImageHandle * image = reinterpret_cast<ImageHandle *>(m_resources.at(descriptor));
+
+        imageInfos.emplace_back(vk::DescriptorImageInfo{
+          .imageView    = image->view,
+          .imageLayout = vk::ImageLayout::eGeneral
+        });
+
+        writes.emplace_back(vk::WriteDescriptorSet{
+          .dstSet           = nullptr,
+          .dstBinding       = binding++,
+          .descriptorCount  = 1,
+          .descriptorType   = vk::DescriptorType::eStorageImage,
+          .pImageInfo       = &imageInfos.back()
+        });
+
+        break;
+      }
       case Invalid:
         Log::warn("invalid RID given as a descriptor");
         return RID();

@@ -1,11 +1,16 @@
 #include "src/include/allocator.hpp"
 #include "src/include/log.hpp"
+#include "src/include/structs.hpp"
 #include "src/include/vulkan_context.hpp"
 
 namespace groot {
 
 std::size_t VkBufferHash::operator()(VkBuffer buffer) const {
   return std::hash<unsigned long>{}(reinterpret_cast<unsigned long>(buffer));
+}
+
+std::size_t VkImageHash::operator()(VkImage image) const {
+  return std::hash<unsigned long>{}(reinterpret_cast<unsigned long>(image));
 }
 
 Allocator::Allocator(const VulkanContext * context, unsigned int apiVersion) {
@@ -23,6 +28,9 @@ Allocator::Allocator(const VulkanContext * context, unsigned int apiVersion) {
 Allocator::~Allocator() {
   for (auto [buffer, allocation] : m_buffers)
     vmaDestroyBuffer(m_allocator, buffer, allocation);
+
+  for (auto [image, allocation] : m_images)
+    vmaDestroyImage(m_allocator, image, allocation);
 
   if (m_allocator)
     vmaDestroyAllocator(m_allocator);
@@ -70,6 +78,36 @@ void Allocator::destroyBuffer(const vk::Buffer& buffer) {
   VmaAllocation alloc = m_buffers.at(buffer);
   vmaDestroyBuffer(m_allocator, buffer, alloc);
   m_buffers.erase(buffer);
+}
+
+vk::Image Allocator::allocateImage(const vk::ImageCreateInfo& createInfo, VmaMemoryUsage memoryUsage) {
+  VmaAllocationCreateInfo allocationCreateInfo{
+    .usage          = memoryUsage,
+    .requiredFlags  = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
+  };
+
+  VkImage image;
+  VmaAllocation allocation;
+
+  if (vmaCreateImage(
+    m_allocator,
+    reinterpret_cast<const VkImageCreateInfo *>(&createInfo),
+    &allocationCreateInfo,
+    &image,
+    &allocation,
+    nullptr
+  ) != VK_SUCCESS) {
+    Log::runtime_error("failed to allocate image");
+  }
+
+  m_images[image] = allocation;
+  return image;
+}
+
+void Allocator::destroyImage(const vk::Image& image) {
+  VmaAllocation alloc = m_images[image];
+  vmaDestroyImage(m_allocator, image, alloc);
+  m_images.erase(image);
 }
 
 } // namespace groot

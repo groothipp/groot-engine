@@ -7,6 +7,7 @@
 #include <string>
 #include <unordered_map>
 #include <functional>
+#include <vector>
 #include <vulkan/vulkan.hpp>
 
 class GLFWwindow;
@@ -45,8 +46,10 @@ class Engine {
 
     RID create_uniform_buffer(unsigned int);
     RID create_storage_buffer(unsigned int);
-    void update_buffer(const RID&, std::size_t, void *) const;
     void destroy_buffer(RID&);
+
+    RID create_storage_image(unsigned int, unsigned int, Format);
+    void destroy_image(RID&);
 
     RID compile_shader(ShaderType type, const std::string&);
     void destroy_shader(RID&);
