@@ -220,6 +220,38 @@ class Engine {
     RID create_storage_buffer(unsigned int);
     void destroy_buffer(RID&);
 
+    template <typename T>
+    inline std::vector<T> read_buffer(const RID& rid) const {
+      auto [size, data] = read_buffer_raw(rid);
+      if (size == 0) return {};
+
+      std::vector<T> out(static_cast<T *>(data), static_cast<T *>(data) + (size / sizeof(T)));
+      delete [] static_cast<char *>(data);
+
+      return out;
+    }
+
+    template <typename T>
+    inline T read_buffer(const RID& rid, const T& error) const {
+      auto [size, data] = read_buffer_raw(rid);
+      if (size == 0) return error;
+
+      T out = *static_cast<T *>(data);
+      delete [] static_cast<char *>(data);
+
+      return out;
+    }
+
+    template <typename T>
+    inline void write_buffer(const RID& rid, const std::vector<T>& data) const {
+      write_buffer_raw(rid, sizeof(T) * data.size(), data.data());
+    }
+
+    template <typename T>
+    inline void write_buffer(const RID& rid, const T& data) const {
+      write_buffer_raw(rid, sizeof(T), &data);
+    }
+
     RID create_storage_image(unsigned int, unsigned int, Format);
     void destroy_image(RID&);
 
@@ -235,6 +267,8 @@ class Engine {
 
   private:
     void updateTimes();
+    std::pair<unsigned int, void *> read_buffer_raw(const RID&) const;
+    void write_buffer_raw(const RID&, std::size_t, const void *) const;
 };
 
 class Log {

@@ -29,6 +29,32 @@ TEST_CASE( "buffer destruction" ) {
   CHECK_FALSE( buffer.is_valid() );
 }
 
+TEST_CASE( "buffer read and write" ) {
+  Engine engine;
+
+  SECTION( "read/write vector" ) {
+    std::vector<int> data(256);
+    RID buffer = engine.create_uniform_buffer(sizeof(int) * data.size());
+    REQUIRE( buffer.is_valid() );
+
+    engine.write_buffer(buffer, data);
+
+    std::vector<int> out = engine.read_buffer<int>(buffer);
+    CHECK( out == data );
+  }
+
+  SECTION( "read/write value" ) {
+    int val = 4;
+    RID buffer = engine.create_uniform_buffer(sizeof(int));
+    REQUIRE( buffer.is_valid() );
+
+    engine.write_buffer(buffer, val);
+
+    int out = engine.read_buffer<int>(buffer, -1);
+    CHECK( val == out );
+  }
+}
+
 TEST_CASE( "invalid buffer operations" ) {
   Engine engine;
 
@@ -52,5 +78,60 @@ TEST_CASE( "invalid buffer operations" ) {
 
     engine.destroy_buffer(image);
     CHECK( image.is_valid() );
+  }
+
+  SECTION( "read invalid buffer RID" ) {
+    RID rid;
+
+    std::vector<int> data = engine.read_buffer<int>(rid);
+    CHECK( data.empty() );
+
+    int val = engine.read_buffer<int>(rid, -1);
+    CHECK( val == -1);
+  }
+
+  SECTION( "read non-buffer RID" ) {
+    RID image = engine.create_storage_image(1024, 1024, Format::rgba8_unorm);
+    REQUIRE( image.is_valid() );
+
+    std::vector<int> data = engine.read_buffer<int>(image);
+    CHECK( data.empty() );
+
+    int val = engine.read_buffer<int>(image, -1);
+    CHECK( val == -1 );
+  }
+
+  SECTION( "write invalid buffer RID" ) {
+    RID rid;
+
+    std::vector<int> data(256);
+    engine.write_buffer(rid, data);
+
+    int val = 4;
+    engine.write_buffer(rid, 4);
+
+    CHECK( true );
+  }
+
+  SECTION( "write non-buffer RID" ) {
+    RID image = engine.create_storage_image(1024, 1024, Format::rgba8_unorm);
+    REQUIRE( image.is_valid() );
+
+    std::vector<int> data(256);
+    engine.write_buffer(image, data);
+
+    int val = 4;
+    engine.write_buffer(image, 4);
+
+    CHECK( true );
+  }
+
+  SECTION( "write empty vector" ) {
+    RID buffer = engine.create_uniform_buffer(1024);
+    REQUIRE( buffer.is_valid() );
+
+    engine.write_buffer(buffer, std::vector<int>{});
+
+    CHECK( true );
   }
 }

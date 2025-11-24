@@ -31,6 +31,7 @@ class Allocator {
     void * mapBuffer(const vk::Buffer&);
     void unmapBuffer(const vk::Buffer&);
     void destroyBuffer(const vk::Buffer&);
+    unsigned int bufferSize(const vk::Buffer&) const;
 
     vk::Image allocateImage(const vk::ImageCreateInfo&, VmaMemoryUsage memoryUsage = VMA_MEMORY_USAGE_AUTO);
     void destroyImage(const vk::Image&);

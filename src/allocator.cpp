@@ -80,6 +80,15 @@ void Allocator::destroyBuffer(const vk::Buffer& buffer) {
   m_buffers.erase(buffer);
 }
 
+unsigned int Allocator::bufferSize(const vk::Buffer& buffer) const {
+  VmaAllocation allocation = m_buffers.at(buffer);
+
+  VmaAllocationInfo info;
+  vmaGetAllocationInfo(m_allocator, allocation, &info);
+
+  return info.size;
+}
+
 vk::Image Allocator::allocateImage(const vk::ImageCreateInfo& createInfo, VmaMemoryUsage memoryUsage) {
   VmaAllocationCreateInfo allocationCreateInfo{
     .usage          = memoryUsage,

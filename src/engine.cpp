@@ -733,4 +733,50 @@ void Engine::updateTimes() {
   m_accumulator += m_frameTime;
 }
 
+std::pair<unsigned int, void *> Engine::read_buffer_raw(const RID& rid) const {
+  if (!rid.is_valid()) {
+    Log::warn("tried to read from invalid buffer RID");
+    return std::make_pair(0, nullptr);
+  }
+
+  if (rid.m_type != ResourceType::UniformBuffer && rid.m_type != ResourceType::StorageBuffer) {
+    Log::warn("tried to read buffer from non-buffer RID");
+    return std::make_pair(0, nullptr);
+  }
+
+  vk::Buffer buffer = reinterpret_cast<VkBuffer>(m_resources.at(rid));
+
+  unsigned int size = m_allocator->bufferSize(buffer);
+  void * data = new char[size];
+
+  void * map = m_allocator->mapBuffer(buffer);
+  std::memcpy(data, map, size);
+  m_allocator->unmapBuffer(buffer);
+
+  return std::make_pair(size, data);
+}
+
+void Engine::write_buffer_raw(const RID& rid, std::size_t size, const void * data) const {
+  if (!rid.is_valid()) {
+    Log::warn("tried to write to invalid buffer RID");
+    return;
+  }
+
+  if (rid.m_type != ResourceType::UniformBuffer && rid.m_type != ResourceType::StorageBuffer) {
+    Log::warn("tried to write to buffer of non-buffer RID");
+    return;
+  }
+
+  if (size == 0) {
+    Log::warn("tried to write 0 bytes to buffer RID");
+    return;
+  }
+
+  vk::Buffer buffer = reinterpret_cast<VkBuffer>(m_resources.at(rid));
+
+  void * map = m_allocator->mapBuffer(buffer);
+  std::memcpy(map, data, size);
+  m_allocator->unmapBuffer(buffer);
+}
+
 } // namespace groot
