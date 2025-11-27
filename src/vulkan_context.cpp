@@ -129,6 +129,7 @@ void VulkanContext::endTransfer(const vk::CommandBuffer& cmdBuffer) const {
   }
 
   m_device.freeCommandBuffers(m_transferCmdPool, cmdBuffer);
+  m_device.destroyFence(fence);
 }
 
 

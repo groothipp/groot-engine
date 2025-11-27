@@ -25,7 +25,7 @@ TEST_CASE( "descriptor set creation" ) {
     CHECK( set.is_valid() );
   }
 
-  SECTION ("storage image" ) {
+  SECTION( "storage image" ) {
     RID image = engine.create_storage_image(1024, 1024, Format::rgba8_unorm);
     REQUIRE( image.is_valid() );
 
@@ -34,16 +34,32 @@ TEST_CASE( "descriptor set creation" ) {
     CHECK( set.is_valid() );
   }
 
+  SECTION( "texture" ) {
+    RID sampler = engine.create_sampler({});
+    REQUIRE( sampler.is_valid() );
+
+    RID texture = engine.create_texture(std::format("{}/img/test.png", GROOT_TEST_DIR), sampler);
+    REQUIRE( sampler.is_valid() );
+
+    RID set = engine.create_descriptor_set({ texture });
+
+    CHECK( set.is_valid() );
+  }
+
   SECTION( "all descriptor types" ) {
     RID uniformBuffer = engine.create_uniform_buffer(1024);
     RID storageBuffer = engine.create_storage_buffer(1024);
     RID image = engine.create_storage_image(1024, 1024, Format::rgba8_unorm);
+    RID sampler = engine.create_sampler({});
+    RID texture = engine.create_texture(std::format("{}/img/test.png", GROOT_TEST_DIR), sampler);
 
     REQUIRE( uniformBuffer.is_valid() );
     REQUIRE( storageBuffer.is_valid() );
     REQUIRE( image.is_valid() );
+    REQUIRE( sampler.is_valid() );
+    REQUIRE( texture.is_valid() );
 
-    RID set = engine.create_descriptor_set({ uniformBuffer, storageBuffer, image });
+    RID set = engine.create_descriptor_set({ uniformBuffer, storageBuffer, image, texture });
 
     CHECK( set.is_valid() );
   }

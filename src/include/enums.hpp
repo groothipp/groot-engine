@@ -18,7 +18,9 @@ enum ResourceType {
   UniformBuffer,
   StorageBuffer,
   Sampler,
-  Image,
+  StorageImage,
+  StorageTexture,
+  Texture
 };
 
 enum class Format {

@@ -78,7 +78,9 @@ Engine::~Engine() {
         m_context->device().destroySampler(reinterpret_cast<VkSampler>(handle));
         break;
       }
-      case ResourceType::Image: {
+      case ResourceType::StorageImage:
+      case ResourceType::StorageTexture:
+      case ResourceType::Texture: {
         ImageHandle * image = reinterpret_cast<ImageHandle *>(handle);
 
         m_context->device().destroyImageView(image->view);
@@ -259,7 +261,7 @@ RID Engine::create_storage_image(unsigned int width, unsigned int height, Format
   handle->image = image;
   handle->view = view;
 
-  RID rid(m_nextRID++, ResourceType::Image);
+  RID rid(m_nextRID++, ResourceType::StorageImage);
   m_resources[rid] = reinterpret_cast<unsigned long>(handle);
 
   return rid;
@@ -388,7 +390,7 @@ RID Engine::create_texture(const std::string& path, const RID& sampler) {
   handle->view = view;
   handle->sampler = sampler;
 
-  RID rid(m_nextRID++, ResourceType::Image);
+  RID rid(m_nextRID++, ResourceType::Texture);
   m_resources[rid] = reinterpret_cast<unsigned long>(handle);
   m_busySamplers.emplace(rid);
 
@@ -401,7 +403,7 @@ void Engine::destroy_image(RID& rid) {
     return;
   }
 
-  if (rid.m_type != ResourceType::Image) {
+  if (rid.m_type != ResourceType::StorageImage && rid.m_type != ResourceType::StorageTexture && rid.m_type != ResourceType::Texture) {
     Log::warn("tried to destroy image of non-image RID");
     return;
   }
@@ -468,7 +470,7 @@ RID Engine::create_descriptor_set(const std::vector<RID>& descriptors) {
   std::vector<vk::WriteDescriptorSet> writes;
 
   unsigned int binding = 0;
-  int uniformPoolIndex = -1, storagePoolIndex = -1, imagePoolIndex = -1;
+  int uniformPoolIndex = -1, storagePoolIndex = -1, imagePoolIndex = -1, texturePoolIndex = -1;
   std::vector<vk::DescriptorSetLayoutBinding> bindings = {};
   for (const auto& descriptor : descriptors) {
     switch (descriptor.m_type) {
@@ -530,7 +532,7 @@ RID Engine::create_descriptor_set(const std::vector<RID>& descriptors) {
         });
 
         break;
-      case Image: {
+      case StorageImage: {
         if (imagePoolIndex == -1) {
           imagePoolIndex = poolSizes.size();
           poolSizes.emplace_back(vk::DescriptorPoolSize{
@@ -557,6 +559,38 @@ RID Engine::create_descriptor_set(const std::vector<RID>& descriptors) {
           .dstBinding       = binding++,
           .descriptorCount  = 1,
           .descriptorType   = vk::DescriptorType::eStorageImage,
+          .pImageInfo       = &imageInfos.back()
+        });
+
+        break;
+      }
+      case Texture: {
+        if (texturePoolIndex == -1) {
+          texturePoolIndex = poolSizes.size();
+          poolSizes.emplace_back(vk::DescriptorPoolSize{
+            .type = vk::DescriptorType::eCombinedImageSampler
+          });
+        }
+        ++poolSizes[texturePoolIndex].descriptorCount;
+
+        bindings.emplace_back(vk::DescriptorSetLayoutBinding{
+          .binding          = binding,
+          .descriptorType   = vk::DescriptorType::eCombinedImageSampler,
+          .descriptorCount  = 1
+        });
+
+        ImageHandle * image = reinterpret_cast<ImageHandle *>(m_resources.at(descriptor));
+
+        imageInfos.emplace_back(vk::DescriptorImageInfo{
+          .imageView    = image->view,
+          .imageLayout  = vk::ImageLayout::eShaderReadOnlyOptimal
+        });
+
+        writes.emplace_back(vk::WriteDescriptorSet{
+          .dstSet           = nullptr,
+          .dstBinding       = binding++,
+          .descriptorCount  = 1,
+          .descriptorType   = vk::DescriptorType::eCombinedImageSampler,
           .pImageInfo       = &imageInfos.back()
         });
 
