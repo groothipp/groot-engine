@@ -6,11 +6,11 @@
 namespace groot {
 
 void Log::generic(const std::string& message) {
-  std::print("[Groot Engine] {}\n", message);
+  std::println("[Groot Engine] {}", message);
 }
 
 void Log::warn(const std::string& message) {
-  std::print("\033[33m[Groot Engine] {}\033[0m\n", message);
+  std::println("\033[33m[Groot Engine] {}\033[0m", message);
 }
 
 void Log::runtime_error(const std::string& message) {

@@ -280,8 +280,9 @@ class Engine {
     RID create_sampler(const SamplerSettings&);
     void destroy_sampler(RID&);
 
-    RID create_storage_image(unsigned int, unsigned int, Format);
+    RID create_storage_image(unsigned int, unsigned int, Format format = Format::rgba16_unorm);
     RID create_texture(const std::string&, const RID&);
+    RID create_storage_texture(unsigned int, unsigned int, const RID&, Format format = Format::rgba16_unorm);
     void destroy_image(RID&);
 
     RID compile_shader(ShaderType type, const std::string&);

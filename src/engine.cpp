@@ -397,6 +397,67 @@ RID Engine::create_texture(const std::string& path, const RID& sampler) {
   return rid;
 }
 
+RID Engine::create_storage_texture(unsigned int width, unsigned int height, const RID& sampler, Format format) {
+  if (!sampler.is_valid()) {
+    Log::warn("tried to create storage texture with invalid sampler RID");
+    return RID();
+  }
+
+  if (sampler.m_type != ResourceType::Sampler) {
+    Log::warn("tried to create storage texture with non-sampler RID");
+    return RID();
+  }
+
+  if (format == Format::undefined) {
+    Log::warn("tried to create storage texture with undefined format");
+    return RID();
+  }
+
+  vk::ImageCreateInfo imageCreateInfo{
+    .imageType    = vk::ImageType::e2D,
+    .format       = static_cast<vk::Format>(format),
+    .extent       = vk::Extent3D{ width, height, 1 },
+    .mipLevels    = 1,
+    .arrayLayers  = 1,
+    .samples      = vk::SampleCountFlagBits::e1,
+    .tiling       = vk::ImageTiling::eOptimal,
+    .usage        = vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled,
+  };
+
+  vk::Image image = m_allocator->allocateImage(imageCreateInfo);
+
+  vk::ImageViewCreateInfo viewCreateInfo{
+    .image = image,
+    .viewType = vk::ImageViewType::e2D,
+    .format = static_cast<vk::Format>(format),
+    .components = {
+      .r = vk::ComponentSwizzle::eIdentity,
+      .g = vk::ComponentSwizzle::eIdentity,
+      .b = vk::ComponentSwizzle::eIdentity,
+      .a = vk::ComponentSwizzle::eIdentity
+    },
+    .subresourceRange = {
+      .aspectMask = vk::ImageAspectFlagBits::eColor,
+      .levelCount = 1,
+      .layerCount = 1
+    }
+  };
+
+  vk::ImageView view = m_context->device().createImageView(viewCreateInfo);
+
+  ImageHandle * handle = new ImageHandle;
+  handle->image = image;
+  handle->view = view;
+  handle->sampler = sampler;
+
+  RID rid(m_nextRID++, ResourceType::StorageTexture);
+  m_resources[rid] = reinterpret_cast<unsigned long>(handle);
+  m_busySamplers.emplace(sampler);
+  m_storageTextures.emplace(reinterpret_cast<unsigned long>(static_cast<VkImage>(image)));
+
+  return rid;
+}
+
 void Engine::destroy_image(RID& rid) {
   if (!rid.is_valid()) {
     Log::warn("tried to destroy invalid image RID");
@@ -465,7 +526,7 @@ RID Engine::create_descriptor_set(const std::vector<RID>& descriptors) {
   bufferInfos.reserve(descriptors.size());
 
   std::vector<vk::DescriptorImageInfo> imageInfos;
-  imageInfos.reserve(descriptors.size());
+  imageInfos.reserve(2 * descriptors.size());
 
   std::vector<vk::WriteDescriptorSet> writes;
 
@@ -486,7 +547,8 @@ RID Engine::create_descriptor_set(const std::vector<RID>& descriptors) {
         bindings.emplace_back(vk::DescriptorSetLayoutBinding{
           .binding          = binding,
           .descriptorType   = vk::DescriptorType::eUniformBuffer,
-          .descriptorCount  = 1
+          .descriptorCount  = 1,
+          .stageFlags       = vk::ShaderStageFlagBits::eAll
         });
 
         bufferInfos.emplace_back(vk::DescriptorBufferInfo{
@@ -515,7 +577,8 @@ RID Engine::create_descriptor_set(const std::vector<RID>& descriptors) {
         bindings.emplace_back(vk::DescriptorSetLayoutBinding{
           .binding          = binding,
           .descriptorType   = vk::DescriptorType::eStorageBuffer,
-          .descriptorCount  = 1
+          .descriptorCount  = 1,
+          .stageFlags       = vk::ShaderStageFlagBits::eAll
         });
 
         bufferInfos.emplace_back(vk::DescriptorBufferInfo{
@@ -544,7 +607,8 @@ RID Engine::create_descriptor_set(const std::vector<RID>& descriptors) {
         bindings.emplace_back(vk::DescriptorSetLayoutBinding{
           .binding          = binding,
           .descriptorType   = vk::DescriptorType::eStorageImage,
-          .descriptorCount  = 1
+          .descriptorCount  = 1,
+          .stageFlags       = vk::ShaderStageFlagBits::eAll
         });
 
         ImageHandle * image = reinterpret_cast<ImageHandle *>(m_resources.at(descriptor));
@@ -576,12 +640,76 @@ RID Engine::create_descriptor_set(const std::vector<RID>& descriptors) {
         bindings.emplace_back(vk::DescriptorSetLayoutBinding{
           .binding          = binding,
           .descriptorType   = vk::DescriptorType::eCombinedImageSampler,
-          .descriptorCount  = 1
+          .descriptorCount  = 1,
+          .stageFlags       = vk::ShaderStageFlagBits::eAll
         });
 
         ImageHandle * image = reinterpret_cast<ImageHandle *>(m_resources.at(descriptor));
 
         imageInfos.emplace_back(vk::DescriptorImageInfo{
+          .sampler      = reinterpret_cast<VkSampler>(m_resources.at(image->sampler)),
+          .imageView    = image->view,
+          .imageLayout  = vk::ImageLayout::eShaderReadOnlyOptimal
+        });
+
+        writes.emplace_back(vk::WriteDescriptorSet{
+          .dstSet           = nullptr,
+          .dstBinding       = binding++,
+          .descriptorCount  = 1,
+          .descriptorType   = vk::DescriptorType::eCombinedImageSampler,
+          .pImageInfo       = &imageInfos.back()
+        });
+
+        break;
+      }
+      case StorageTexture: {
+        if (imagePoolIndex == -1) {
+          imagePoolIndex = poolSizes.size();
+          poolSizes.emplace_back(vk::DescriptorPoolSize{
+            .type = vk::DescriptorType::eStorageImage
+          });
+        }
+        ++poolSizes[imagePoolIndex].descriptorCount;
+
+        if (texturePoolIndex == -1) {
+          texturePoolIndex = poolSizes.size();
+          poolSizes.emplace_back(vk::DescriptorPoolSize{
+            .type = vk::DescriptorType::eCombinedImageSampler
+          });
+        }
+        ++poolSizes[texturePoolIndex].descriptorCount;
+
+        ImageHandle * image = reinterpret_cast<ImageHandle *>(m_resources.at(descriptor));
+
+        bindings.emplace_back(vk::DescriptorSetLayoutBinding{
+          .binding          = binding,
+          .descriptorType   = vk::DescriptorType::eStorageImage,
+          .descriptorCount  = 1,
+          .stageFlags       = vk::ShaderStageFlagBits::eAll
+        });
+
+        imageInfos.emplace_back(vk::DescriptorImageInfo{
+          .imageView    = image->view,
+          .imageLayout  = vk::ImageLayout::eGeneral
+        });
+
+        writes.emplace_back(vk::WriteDescriptorSet{
+          .dstSet           = nullptr,
+          .dstBinding       = binding++,
+          .descriptorCount  = 1,
+          .descriptorType   = vk::DescriptorType::eStorageImage,
+          .pImageInfo       = &imageInfos.back()
+        });
+
+        bindings.emplace_back(vk::DescriptorSetLayoutBinding{
+          .binding          = binding,
+          .descriptorType   = vk::DescriptorType::eCombinedImageSampler,
+          .descriptorCount  = 1,
+          .stageFlags       = vk::ShaderStageFlagBits::eAll
+        });
+
+        imageInfos.emplace_back(vk::DescriptorImageInfo{
+          .sampler      = reinterpret_cast<VkSampler>(m_resources.at(image->sampler)),
           .imageView    = image->view,
           .imageLayout  = vk::ImageLayout::eShaderReadOnlyOptimal
         });

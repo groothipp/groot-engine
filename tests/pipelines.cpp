@@ -16,15 +16,18 @@ TEST_CASE( "pipeline creation" ) {
   REQUIRE( set.is_valid() );
 
   SECTION( "compute pipeline" ) {
+    std::println("--- create compute pipeline ---");
+
     RID shader = engine.compile_shader(ShaderType::Compute, shaderPath);
     REQUIRE( shader.is_valid() );
 
     RID pipeline = engine.create_compute_pipeline(shader, set);
-
     CHECK( pipeline.is_valid());
   }
 
   SECTION( "graphics pipeline" ) {
+    std::println("--- create graphics pipeline ---");
+
     RID vertexShader = engine.compile_shader(ShaderType::Vertex, shaderPath);
     RID fragmentShader = engine.compile_shader(ShaderType::Fragment, shaderPath);
 
@@ -41,6 +44,8 @@ TEST_CASE( "pipeline creation" ) {
 }
 
 TEST_CASE( "pipeline destruction" ) {
+  std::println("--- pipeline destruction ---");
+
   Engine engine;
 
   RID buffer = engine.create_uniform_buffer(1024);
@@ -75,6 +80,8 @@ TEST_CASE( "invalid pipeline operations" ) {
   REQUIRE( set.is_valid() );
 
   SECTION( "invalid shader RID" ) {
+    std::println("--- create pipeline with invalid RID ---");
+
     RID rid;
 
     RID computePipeline = engine.create_compute_pipeline(rid, set);
@@ -94,6 +101,8 @@ TEST_CASE( "invalid pipeline operations" ) {
   }
 
   SECTION( "non-shader RID") {
+    std::println("--- create pipeline with non-shader RID ---");
+
     RID computePipeline = engine.create_compute_pipeline(buffer, set);
     CHECK_FALSE( computePipeline.is_valid() );
 
@@ -111,6 +120,8 @@ TEST_CASE( "invalid pipeline operations" ) {
   }
 
   SECTION( "invalid descriptor set RID" ) {
+    std::println("--- create pipeline with invalid descriptor set RID ---");
+
     RID rid;
 
     RID computePipeline = engine.create_compute_pipeline(compute, rid);
@@ -124,6 +135,8 @@ TEST_CASE( "invalid pipeline operations" ) {
   }
 
   SECTION( "non-descriptor-set RID") {
+    std::println("--- create pipeline with non-descriptor-set RID ---\n");
+
     RID computePipeline = engine.create_compute_pipeline(compute, buffer);
     CHECK_FALSE( computePipeline.is_valid() );
 
@@ -135,12 +148,16 @@ TEST_CASE( "invalid pipeline operations" ) {
   }
 
   SECTION( "destroy invalid RID" ) {
+    std::println("--- destroy invalid pipeline RID ---");
+
     RID rid;
     engine.destroy_pipeline(rid);
     CHECK( true );
   }
 
   SECTION( "destroy non-pipeline RID" ) {
+    std::println("--- destroy non-pipeline RID ---\n");
+
     engine.destroy_pipeline(buffer);
     CHECK( buffer.is_valid() );
   }
