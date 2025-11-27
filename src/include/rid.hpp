@@ -12,9 +12,10 @@ class RID {
   unsigned long m_id = ~(0x0);
   ResourceType m_type = ResourceType::Invalid;
 
-  struct Hash {
-    std::size_t operator()(const RID&) const;
-  };
+  public:
+    struct Hash {
+      std::size_t operator()(const RID&) const;
+    };
 
   public:
     RID() = default;

@@ -13,7 +13,7 @@
 
 namespace groot {
 
-Engine::Engine(Settings settings) : m_settings(settings) {
+Engine::Engine(const Settings& settings) : m_settings(settings) {
   if (!glfwInit())
     Log::runtime_error("failed to initialize GLFW");
 

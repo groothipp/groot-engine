@@ -19,7 +19,7 @@ class Allocator;
 class VulkanContext;
 class ShaderCompiler;
 
-class Engine {
+class alignas(64) Engine {
   Settings m_settings = Settings{};
   GLFWwindow * m_window = nullptr;
   VulkanContext * m_context = nullptr;
@@ -36,7 +36,7 @@ class Engine {
   double m_accumulator = 0.0;
 
   public:
-    explicit Engine(Settings settings = Settings{});
+    explicit Engine(const Settings& settings = Settings{});
     Engine(const Engine&) = delete;
     Engine(Engine&&) = delete;
 
