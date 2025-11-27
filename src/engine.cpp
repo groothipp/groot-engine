@@ -2,9 +2,10 @@
 #include "src/include/engine.hpp"
 #include "src/include/log.hpp"
 #include "src/include/shader_compiler.hpp"
+#include "src/include/stb_image.h"
+#include "src/include/structs.hpp"
 #include "src/include/vulkan_context.hpp"
 #include "vulkan/vulkan.hpp"
-#include "vulkan/vulkan_core.h"
 
 #include <GLFW/glfw3.h>
 
@@ -35,6 +36,7 @@ Engine::Engine(Settings settings) : m_settings(settings) {
 
   m_context->chooseGPU(m_settings.gpu_index, requiredExtensions);
   m_context->createDevice(requiredExtensions);
+  m_context->createCommandPools();
   m_context->printInfo();
 
   m_allocator = new Allocator(m_context, m_context->gpu().getProperties().apiVersion);
@@ -72,6 +74,10 @@ Engine::~Engine() {
       case ResourceType::StorageBuffer:
         m_allocator->destroyBuffer(reinterpret_cast<VkBuffer>(handle));
         break;
+      case ResourceType::Sampler: {
+        m_context->device().destroySampler(reinterpret_cast<VkSampler>(handle));
+        break;
+      }
       case ResourceType::Image: {
         ImageHandle * image = reinterpret_cast<ImageHandle *>(handle);
 
@@ -157,6 +163,50 @@ void Engine::destroy_buffer(RID& rid) {
   rid.invalidate();
 }
 
+RID Engine::create_sampler(const SamplerSettings& settings) {
+  bool anisotropy = settings.anisotropic_filtering;
+  if (anisotropy && m_context->supportsAnisotropy()) {
+    Log::warn("GPU does not support anisotropic filtering. sampler will not use this feature");
+    anisotropy = false;
+  }
+
+  vk::Sampler sampler = m_context->device().createSampler(vk::SamplerCreateInfo{
+    .magFilter        = static_cast<vk::Filter>(settings.mag_filter),
+    .minFilter        = static_cast<vk::Filter>(settings.min_filter),
+    .addressModeU     = static_cast<vk::SamplerAddressMode>(settings.mode_u),
+    .addressModeV     = static_cast<vk::SamplerAddressMode>(settings.mode_v),
+    .anisotropyEnable = true,
+    .maxAnisotropy    = m_context->gpu().getProperties().limits.maxSamplerAnisotropy
+  });
+
+  RID rid(m_nextRID++, ResourceType::Sampler);
+  m_resources[rid] = reinterpret_cast<unsigned long>(static_cast<VkSampler>(sampler));
+
+  return rid;
+}
+
+void Engine::destroy_sampler(RID& rid) {
+  if (!rid.is_valid()) {
+    Log::warn("tried to destroy sampler invalid rid");
+    return;
+  }
+
+  if (rid.m_type != ResourceType::Sampler) {
+    Log::warn("tried to destroy sampler of non-sampler RID");
+    return;
+  }
+
+  if (m_busySamplers.contains(rid)) {
+    Log::warn("cannot destroy sampler -- sampler is in use");
+    return;
+  }
+
+  m_context->device().destroySampler(reinterpret_cast<VkSampler>(m_resources.at(rid)));
+  m_resources.erase(rid);
+
+  rid.invalidate();
+}
+
 RID Engine::create_storage_image(unsigned int width, unsigned int height, Format format) {
   if (format == Format::undefined) {
     Log::warn("tried to create storage image with undefined format");
@@ -182,7 +232,6 @@ RID Engine::create_storage_image(unsigned int width, unsigned int height, Format
     .samples      = vk::SampleCountFlagBits::e1,
     .tiling       = vk::ImageTiling::eOptimal,
     .usage        = vk::ImageUsageFlagBits::eStorage,
-    .sharingMode  = vk::SharingMode::eExclusive
   };
 
   vk::Image image = m_allocator->allocateImage(imageCreateInfo);
@@ -216,6 +265,136 @@ RID Engine::create_storage_image(unsigned int width, unsigned int height, Format
   return rid;
 }
 
+RID Engine::create_texture(const std::string& path, const RID& sampler) {
+  if (!sampler.is_valid()) {
+    Log::warn("tried to create image with invalid sampler RID");
+    return RID();
+  }
+
+  if (sampler.m_type != ResourceType::Sampler) {
+    Log::warn("tried to create image with non-sampler RID");
+    return RID();
+  }
+
+  int width, height, channels;
+  unsigned char * pixels = stbi_load(path.c_str(), &width, &height, &channels, STBI_rgb_alpha);
+  if (!pixels) {
+    Log::warn(std::format("failed to load image: {}", std::string(stbi_failure_reason())));
+    return RID();
+  }
+  unsigned int size = width * height * 4;
+
+  vk::Buffer buffer = m_allocator->allocateBuffer(vk::BufferCreateInfo{
+    .size   = static_cast<unsigned int>(width * height * 4),
+    .usage  = vk::BufferUsageFlagBits::eTransferSrc
+  });
+
+  void * map = m_allocator->mapBuffer(buffer);
+  std::memcpy(map, pixels, size);
+  m_allocator->unmapBuffer(buffer);
+
+  stbi_image_free(pixels);
+  map = pixels = nullptr;
+
+  vk::Image image = m_allocator->allocateImage(vk::ImageCreateInfo{
+    .imageType    = vk::ImageType::e2D,
+    .format       = vk::Format::eR8G8B8A8Srgb,
+    .extent       = { static_cast<unsigned int>(width), static_cast<unsigned int>(height), 1 },
+    .mipLevels    = 1,
+    .arrayLayers  = 1,
+    .samples      = vk::SampleCountFlagBits::e1,
+    .tiling       = vk::ImageTiling::eOptimal,
+    .usage        = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferDst
+  });
+
+  vk::BufferImageCopy copy{
+    .bufferRowLength    = static_cast<unsigned int>(4 * width),
+    .bufferImageHeight = static_cast<unsigned int>(height),
+  };
+
+  vk::CommandBuffer cmdBuf = m_context->beginTransfer();
+
+  vk::ImageMemoryBarrier copyBarrier{
+    .dstAccessMask    = vk::AccessFlagBits::eTransferWrite,
+    .newLayout        = vk::ImageLayout::eTransferDstOptimal,
+    .image            = image,
+    .subresourceRange = {
+      .aspectMask = vk::ImageAspectFlagBits::eColor,
+      .levelCount = 1,
+      .layerCount = 1
+    }
+  };
+
+  cmdBuf.pipelineBarrier(
+    vk::PipelineStageFlagBits::eTopOfPipe,
+    vk::PipelineStageFlagBits::eTransfer,
+    vk::DependencyFlags(),
+    nullptr,
+    nullptr,
+    copyBarrier
+  );
+
+  cmdBuf.copyBufferToImage(buffer, image, vk::ImageLayout::eTransferDstOptimal, vk::BufferImageCopy{
+    .imageSubresource = {
+      .aspectMask = vk::ImageAspectFlagBits::eColor,
+      .layerCount = 1
+    },
+    .imageExtent = { static_cast<unsigned int>(width), static_cast<unsigned int>(height), 1 }
+  });
+
+  vk::ImageMemoryBarrier shaderBarrier{
+    .srcAccessMask    = vk::AccessFlagBits::eTransferWrite,
+    .dstAccessMask    = vk::AccessFlagBits::eShaderRead,
+    .oldLayout        = vk::ImageLayout::eTransferDstOptimal,
+    .newLayout        = vk::ImageLayout::eShaderReadOnlyOptimal,
+    .image            = image,
+    .subresourceRange = {
+      .aspectMask = vk::ImageAspectFlagBits::eColor,
+      .levelCount = 1,
+      .layerCount = 1
+    }
+  };
+
+  cmdBuf.pipelineBarrier(
+    vk::PipelineStageFlagBits::eTransfer,
+    vk::PipelineStageFlagBits::eFragmentShader,
+    vk::DependencyFlags(),
+    nullptr,
+    nullptr,
+    shaderBarrier
+  );
+
+  m_context->endTransfer(cmdBuf);
+
+  vk::ImageView view = m_context->device().createImageView(vk::ImageViewCreateInfo{
+    .image = image,
+    .viewType = vk::ImageViewType::e2D,
+    .format = vk::Format::eR8G8B8A8Srgb,
+    .components = {
+      .r = vk::ComponentSwizzle::eIdentity,
+      .g = vk::ComponentSwizzle::eIdentity,
+      .b = vk::ComponentSwizzle::eIdentity,
+      .a = vk::ComponentSwizzle::eIdentity
+    },
+    .subresourceRange = {
+      .aspectMask = vk::ImageAspectFlagBits::eColor,
+      .levelCount = 1,
+      .layerCount = 1
+    }
+  });
+
+  ImageHandle * handle = new ImageHandle;
+  handle->image = image;
+  handle->view = view;
+  handle->sampler = sampler;
+
+  RID rid(m_nextRID++, ResourceType::Image);
+  m_resources[rid] = reinterpret_cast<unsigned long>(handle);
+  m_busySamplers.emplace(rid);
+
+  return rid;
+}
+
 void Engine::destroy_image(RID& rid) {
   if (!rid.is_valid()) {
     Log::warn("tried to destroy invalid image RID");
@@ -231,8 +410,10 @@ void Engine::destroy_image(RID& rid) {
 
   m_context->device().destroyImageView(image->view);
   m_allocator->destroyImage(image->image);
-  delete image;
+  if (image->sampler.is_valid())
+    m_busySamplers.erase(image->sampler);
 
+  delete image;
   m_resources.erase(rid);
 
   rid.invalidate();

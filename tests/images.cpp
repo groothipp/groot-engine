@@ -11,16 +11,41 @@ TEST_CASE( "image creation" ) {
     RID image = engine.create_storage_image(1024, 1024, Format::rgba8_unorm);
     CHECK( image.is_valid() );
   }
+
+  SECTION( "texture" ) {
+    RID sampler = engine.create_sampler({});
+    REQUIRE( sampler.is_valid() );
+
+    RID texture = engine.create_texture(std::format("{}/img/test.png", GROOT_TEST_DIR), sampler);
+
+    CHECK( texture.is_valid() );
+  }
 }
 
 TEST_CASE( "image destruction" ) {
   Engine engine;
 
-  RID image = engine.create_storage_image(1024, 1024, Format::rgba8_unorm);
-  REQUIRE( image.is_valid() );
+  SECTION( "image" ) {
+    RID image = engine.create_storage_image(1024, 1024, Format::rgba8_unorm);
+    REQUIRE( image.is_valid() );
 
-  engine.destroy_image(image);
-  CHECK_FALSE( image.is_valid() );
+    engine.destroy_image(image);
+    CHECK_FALSE( image.is_valid() );
+  }
+
+  SECTION( "texture" ) {
+    RID sampler = engine.create_sampler({});
+    REQUIRE( sampler.is_valid() );
+
+    RID texture = engine.create_texture(std::format("{}/img/test.png", GROOT_TEST_DIR), sampler);
+    REQUIRE( texture.is_valid() );
+
+    engine.destroy_image(texture);
+    engine.destroy_sampler(sampler);
+
+    CHECK_FALSE( texture.is_valid() );
+    CHECK_FALSE( sampler.is_valid() );
+  }
 }
 
 TEST_CASE( "invalid image operations" ) {
@@ -51,5 +76,27 @@ TEST_CASE( "invalid image operations" ) {
 
     engine.destroy_image(buffer);
     CHECK( buffer.is_valid() );
+  }
+
+  SECTION( "create texture with invalid sampler RID" ) {
+    RID rid;
+    RID texture = engine.create_texture(std::format("{}/img/test.png", GROOT_TEST_DIR), rid);
+    CHECK_FALSE( texture.is_valid() );
+  }
+
+  SECTION( "create texture with non-sampler RID" ) {
+    RID buffer = engine.create_uniform_buffer(1024);
+    REQUIRE( buffer.is_valid() );
+
+    RID texture = engine.create_texture(std::format("{}/img/test.png", GROOT_TEST_DIR), buffer);
+    CHECK_FALSE( texture.is_valid() );
+  }
+
+  SECTION( "create texture with invalid image" ) {
+    RID sampler = engine.create_sampler({});
+    REQUIRE( sampler.is_valid() );
+
+    RID texture = engine.create_texture("", sampler);
+    CHECK_FALSE( texture.is_valid() );
   }
 }

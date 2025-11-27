@@ -17,7 +17,8 @@ enum ResourceType {
   DescriptorSet,
   UniformBuffer,
   StorageBuffer,
-  Image
+  Sampler,
+  Image,
 };
 
 enum class Format {
@@ -106,6 +107,18 @@ enum CullMode {
 enum DrawDirection {
   CounterClockwise,
   Clockwise
+};
+
+enum SampleMode {
+  Repeat,
+  MirroredRepeat,
+  ClampToEdge,
+  ClampToBorder
+};
+
+enum Filter {
+  Nearest,
+  Linear
 };
 
 } // namespace groot

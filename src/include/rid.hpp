@@ -27,6 +27,8 @@ class RID {
     RID& operator=(RID&&) = default;
 
     bool operator==(const RID&) const;
+    bool operator<(const RID&) const;
+    bool operator>(const RID&) const;
     const unsigned long& operator*() const;
 
     bool is_valid() const;

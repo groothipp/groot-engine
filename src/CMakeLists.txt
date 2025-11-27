@@ -11,6 +11,7 @@ set(ENGINE_INCLUDES
   ${CMAKE_CURRENT_SOURCE_DIR}/include/log.hpp
   ${CMAKE_CURRENT_SOURCE_DIR}/include/rid.hpp
   ${CMAKE_CURRENT_SOURCE_DIR}/include/shader_compiler.hpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/stb_image.h
   ${CMAKE_CURRENT_SOURCE_DIR}/include/structs.hpp
   ${CMAKE_CURRENT_SOURCE_DIR}/include/vulkan_context.hpp
 )
@@ -21,6 +22,7 @@ set(ENGINE_SOURCES
   ${CMAKE_CURRENT_SOURCE_DIR}/log.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/rid.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/shader_compiler.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/stb_image.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/vma.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/vulkan_context.cpp
 )

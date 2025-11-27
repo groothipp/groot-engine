@@ -7,6 +7,7 @@
 #include <string>
 #include <unordered_map>
 #include <functional>
+#include <set>
 #include <vector>
 #include <vulkan/vulkan.hpp>
 
@@ -25,12 +26,13 @@ class Engine {
   Allocator * m_allocator = nullptr;
   ShaderCompiler * m_compiler = nullptr;
 
+  unsigned long m_nextRID = 0;
+  std::unordered_map<RID, unsigned long, RID::Hash> m_resources;
+  std::set<RID> m_busySamplers = {};
+
   double m_frameTime = 0.0;
   double m_time = 0.0;
   double m_accumulator = 0.0;
-
-  unsigned long m_nextRID = 0;
-  std::unordered_map<RID, unsigned long, RID::Hash> m_resources;
 
   public:
     explicit Engine(Settings settings = Settings{});
@@ -80,7 +82,11 @@ class Engine {
       write_buffer_raw(rid, sizeof(T), &data);
     }
 
+    RID create_sampler(const SamplerSettings&);
+    void destroy_sampler(RID&);
+
     RID create_storage_image(unsigned int, unsigned int, Format);
+    RID create_texture(const std::string&, const RID&);
     void destroy_image(RID&);
 
     RID compile_shader(ShaderType type, const std::string&);

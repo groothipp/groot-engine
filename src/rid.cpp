@@ -14,6 +14,14 @@ bool RID::operator==(const RID& rhs) const {
   return m_id == rhs.m_id;
 }
 
+bool RID::operator<(const RID& rhs) const {
+  return m_id < rhs.m_id;
+}
+
+bool RID::operator>(const RID& rhs) const {
+  return m_id > rhs.m_id;
+}
+
 const unsigned long& RID::operator*() const {
   return m_id;
 }

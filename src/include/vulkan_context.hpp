@@ -18,6 +18,8 @@ class VulkanContext {
   vk::Queue m_transferQueue = nullptr;
   vk::Queue m_computeQueue = nullptr;
 
+  vk::CommandPool m_transferCmdPool = nullptr;
+
   public:
     VulkanContext(const std::string&, const unsigned int&);
     VulkanContext(const VulkanContext&) = delete;
@@ -34,10 +36,14 @@ class VulkanContext {
     const vk::Device& device() const;
     bool supportsTesselation() const;
     bool supportsNonSolidMesh() const;
+    bool supportsAnisotropy() const;
+    vk::CommandBuffer beginTransfer() const;
+    void endTransfer(const vk::CommandBuffer&) const;
 
     void createSurface(GLFWwindow *);
     void chooseGPU(const unsigned int&, const std::vector<const char *>&);
     void createDevice(std::vector<const char *>&);
+    void createCommandPools();
 
   private:
     unsigned int getQueueFamilyIndices() const;

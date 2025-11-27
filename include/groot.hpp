@@ -1,6 +1,7 @@
 #pragma once
 
 #include <functional>
+#include <set>
 #include <string>
 #include <unordered_map>
 
@@ -27,7 +28,8 @@ enum ResourceType {
   DescriptorSet,
   UniformBuffer,
   StorageBuffer,
-  Image
+  Sampler,
+  Image,
 };
 
 enum class Format {
@@ -118,6 +120,18 @@ enum DrawDirection {
   Clockwise
 };
 
+enum SampleMode {
+  Repeat,
+  MirroredRepeat,
+  ClampToEdge,
+  ClampToBorder
+};
+
+enum Filter {
+  Nearest,
+  Linear
+};
+
 struct Settings {
   std::string application_name = "Groot Engine Application";
   unsigned int application_version = 1;
@@ -150,6 +164,8 @@ class RID {
     RID& operator=(RID&&) = default;
 
     bool operator==(const RID&) const;
+    bool operator<(const RID&) const;
+    bool operator>(const RID&) const;
     const unsigned long& operator*() const;
 
     bool is_valid() const;
@@ -190,6 +206,14 @@ struct GraphicsPipelineSettings {
   bool enable_blend = true;
 };
 
+struct SamplerSettings {
+  Filter mag_filter = Filter::Linear;
+  Filter min_filter = Filter::Linear;
+  SampleMode mode_u = SampleMode::Repeat;
+  SampleMode mode_v = SampleMode::Repeat;
+  bool anisotropic_filtering = true;
+};
+
 class Engine {
   Settings m_settings = Settings{};
   GLFWwindow * m_window = nullptr;
@@ -197,12 +221,13 @@ class Engine {
   Allocator * m_allocator = nullptr;
   ShaderCompiler * m_compiler = nullptr;
 
+  unsigned long m_nextRID = 0;
+  std::unordered_map<RID, unsigned long, RID::Hash> m_resources;
+  std::set<RID> m_busySamplers = {};
+
   double m_frameTime = 0.0;
   double m_time = 0.0;
   double m_accumulator = 0.0;
-
-  unsigned long m_nextRID = 0;
-  std::unordered_map<RID, unsigned long, RID::Hash> m_resources;
 
   public:
     explicit Engine(Settings settings = Settings{});
@@ -252,7 +277,11 @@ class Engine {
       write_buffer_raw(rid, sizeof(T), &data);
     }
 
+    RID create_sampler(const SamplerSettings&);
+    void destroy_sampler(RID&);
+
     RID create_storage_image(unsigned int, unsigned int, Format);
+    RID create_texture(const std::string&, const RID&);
     void destroy_image(RID&);
 
     RID compile_shader(ShaderType type, const std::string&);

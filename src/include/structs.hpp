@@ -70,6 +70,15 @@ struct PipelineHandle {
 struct ImageHandle {
   vk::Image image = nullptr;
   vk::ImageView view = nullptr;
+  RID sampler = RID();
+};
+
+struct SamplerSettings {
+  Filter mag_filter = Filter::Linear;
+  Filter min_filter = Filter::Linear;
+  SampleMode mode_u = SampleMode::Repeat;
+  SampleMode mode_v = SampleMode::Repeat;
+  bool anisotropic_filtering = true;
 };
 
 } // namespace groot

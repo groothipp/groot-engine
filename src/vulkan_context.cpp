@@ -59,6 +59,7 @@ VulkanContext::VulkanContext(const std::string& applicationName, const unsigned 
 }
 
 VulkanContext::~VulkanContext() {
+  m_device.destroyCommandPool(m_transferCmdPool);
   m_device.destroy();
   m_instance.destroySurfaceKHR(m_surface);
   m_instance.destroy();
@@ -96,6 +97,41 @@ bool VulkanContext::supportsNonSolidMesh() const {
   return m_gpu.getFeatures().fillModeNonSolid;
 }
 
+bool VulkanContext::supportsAnisotropy() const {
+  return m_gpu.getFeatures().samplerAnisotropy;
+}
+
+vk::CommandBuffer VulkanContext::beginTransfer() const {
+
+  vk::CommandBuffer cmdBuffer = m_device.allocateCommandBuffers(vk::CommandBufferAllocateInfo{
+    .commandPool        = m_transferCmdPool,
+    .level              = vk::CommandBufferLevel::ePrimary,
+    .commandBufferCount = 1
+  })[0];
+
+  cmdBuffer.begin(vk::CommandBufferBeginInfo{});
+  return cmdBuffer;
+}
+
+void VulkanContext::endTransfer(const vk::CommandBuffer& cmdBuffer) const {
+  cmdBuffer.end();
+
+  vk::SubmitInfo submitInfo{
+    .commandBufferCount = 1,
+    .pCommandBuffers    = &cmdBuffer
+  };
+
+  vk::Fence fence = m_device.createFence({});
+  m_transferQueue.submit(submitInfo, fence);
+  if (m_device.waitForFences(fence, true, 1000000000) != vk::Result::eSuccess) {
+    m_device.freeCommandBuffers(m_transferCmdPool, cmdBuffer);
+    Log::runtime_error("hung waiting for transfer");
+  }
+
+  m_device.freeCommandBuffers(m_transferCmdPool, cmdBuffer);
+}
+
+
 void VulkanContext::createSurface(GLFWwindow * window) {
   VkSurfaceKHR rawSurface = nullptr;
   if (glfwCreateWindowSurface(m_instance, window, nullptr, &rawSurface) != VK_SUCCESS)
@@ -127,6 +163,9 @@ void VulkanContext::chooseGPU(const unsigned int& gpuIndex, const std::vector<co
   if (!gpus[gpuIndex].getFeatures().fillModeNonSolid)
     Log::warn("GPU does not support non-solid mesh types");
 
+  if (!gpus[gpuIndex].getFeatures().samplerAnisotropy)
+    Log::warn("GPU does not support anisotropic filtering");
+
   m_gpu = gpus[gpuIndex];
   m_queueFamilyIndices = getQueueFamilyIndices();
 }
@@ -146,7 +185,8 @@ void VulkanContext::createDevice(std::vector<const char *>& extensions) {
 
   vk::PhysicalDeviceFeatures features{
     .tessellationShader = m_gpu.getFeatures().tessellationShader,
-    .fillModeNonSolid   = m_gpu.getFeatures().fillModeNonSolid
+    .fillModeNonSolid   = m_gpu.getFeatures().fillModeNonSolid,
+    .samplerAnisotropy  = m_gpu.getFeatures().samplerAnisotropy
   };
 
   vk::PhysicalDeviceDynamicRenderingFeatures dynamicRenderingFeature{
@@ -170,6 +210,13 @@ void VulkanContext::createDevice(std::vector<const char *>& extensions) {
   m_presentQueue = m_device.getQueue((m_queueFamilyIndices >> PRESENT_SHIFT) & 0xFF, 0);
   m_computeQueue = m_device.getQueue((m_queueFamilyIndices >> COMPUTE_SHIFT) & 0xFF, 0);
   m_transferQueue = m_device.getQueue((m_queueFamilyIndices >> TRANSFER_SHIFT) & 0xFF, 0);
+}
+
+void VulkanContext::createCommandPools() {
+  m_transferCmdPool = m_device.createCommandPool(vk::CommandPoolCreateInfo{
+    .flags            = vk::CommandPoolCreateFlagBits::eTransient,
+    .queueFamilyIndex = (m_queueFamilyIndices >> TRANSFER_SHIFT) & 0xFF
+  });
 }
 
 unsigned int VulkanContext::getQueueFamilyIndices() const {
