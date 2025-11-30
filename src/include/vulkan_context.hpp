@@ -19,6 +19,7 @@ class VulkanContext {
   vk::Queue m_computeQueue = nullptr;
 
   vk::CommandPool m_transferCmdPool = nullptr;
+  vk::CommandPool m_computeCmdPool = nullptr;
 
   public:
     VulkanContext(const std::string&, const unsigned int&);
@@ -39,6 +40,8 @@ class VulkanContext {
     bool supportsAnisotropy() const;
     vk::CommandBuffer beginTransfer() const;
     void endTransfer(const vk::CommandBuffer&) const;
+    vk::CommandBuffer beginDispatch() const;
+    void endDispatch(const vk::CommandBuffer&) const;
 
     void createSurface(GLFWwindow *);
     void chooseGPU(const unsigned int&, const std::vector<const char *>&);

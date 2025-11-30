@@ -5,6 +5,8 @@
 
 #include <vulkan/vulkan_raii.hpp>
 
+#include <cstdint>
+
 namespace groot {
 
 struct VkBufferHash {
@@ -79,6 +81,14 @@ struct SamplerSettings {
   SampleMode mode_u = SampleMode::Repeat;
   SampleMode mode_v = SampleMode::Repeat;
   bool anisotropic_filtering = true;
+};
+
+struct ComputeCommand {
+  RID pipeline = RID();
+  RID descriptor_set = RID();
+  std::vector<uint8_t> push_constants;
+  bool barrier = false;
+  std::tuple<unsigned int, unsigned int, unsigned int> work_groups = { 1, 1, 1 };
 };
 
 } // namespace groot

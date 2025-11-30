@@ -1,11 +1,11 @@
 #include "src/include/allocator.hpp"
 #include "src/include/engine.hpp"
+#include "src/include/enums.hpp"
 #include "src/include/log.hpp"
 #include "src/include/shader_compiler.hpp"
 #include "src/include/stb_image.h"
 #include "src/include/structs.hpp"
 #include "src/include/vulkan_context.hpp"
-#include "vulkan/vulkan.hpp"
 
 #include <GLFW/glfw3.h>
 
@@ -476,8 +476,10 @@ void Engine::destroy_image(RID& rid) {
   if (image->sampler.is_valid())
     m_busySamplers.erase(image->sampler);
 
-  delete image;
+  if (rid.m_type == ResourceType::StorageTexture)
+    m_storageTextures.erase(reinterpret_cast<unsigned long>(static_cast<VkImage>(image->image)));
   m_resources.erase(rid);
+  delete image;
 
   rid.invalidate();
 }
@@ -818,9 +820,16 @@ RID Engine::create_compute_pipeline(const RID& shader, const RID& descriptorSet)
 
   DescriptorSetHandle * set = reinterpret_cast<DescriptorSetHandle *>(m_resources.at(descriptorSet));
 
+  vk::PushConstantRange pushConstants{
+    .stageFlags = vk::ShaderStageFlagBits::eCompute,
+    .size = m_context->gpu().getProperties().limits.maxPushConstantsSize
+  };
+
   vk::PipelineLayoutCreateInfo layoutCreateInfo{
-    .setLayoutCount = 0,
-    .pSetLayouts    = &set->layout
+    .setLayoutCount         = 1,
+    .pSetLayouts            = &set->layout,
+    .pushConstantRangeCount = 1,
+    .pPushConstantRanges    = &pushConstants
   };
 
   PipelineHandle * pipeline = new PipelineHandle;
@@ -920,9 +929,16 @@ RID Engine::create_graphics_pipeline(const GraphicsPipelineShaders& shaders, con
 
   DescriptorSetHandle * set = reinterpret_cast<DescriptorSetHandle *>(m_resources.at(descriptorSet));
 
+  vk::PushConstantRange pushConstants{
+    .stageFlags = vk::ShaderStageFlagBits::eAll,
+    .size = m_context->gpu().getProperties().limits.maxPushConstantsSize
+  };
+
   vk::PipelineLayoutCreateInfo layoutCreateInfo{
-    .setLayoutCount = 1,
-    .pSetLayouts    = &set->layout
+    .setLayoutCount         = 1,
+    .pSetLayouts            = &set->layout,
+    .pushConstantRangeCount = 1,
+    .pPushConstantRanges    = &pushConstants
   };
 
   PipelineHandle * pipeline = new PipelineHandle;
@@ -954,7 +970,6 @@ RID Engine::create_graphics_pipeline(const GraphicsPipelineShaders& shaders, con
     .topology               = vk::PrimitiveTopology::eTriangleList,
     .primitiveRestartEnable = false
   };
-
 
   vk::PolygonMode polygonMode = static_cast<vk::PolygonMode>(s.mesh_type);
   if (s.mesh_type != MeshType::Solid && !m_context->supportsNonSolidMesh()) {
@@ -1063,6 +1078,78 @@ void Engine::destroy_pipeline(RID& rid) {
   m_resources.erase(rid);
 
   rid.invalidate();
+}
+
+void Engine::compute_command(const ComputeCommand& cmd) {
+  if (!cmd.pipeline.is_valid()) {
+    Log::warn("tried to submit compute command with invalid pipeline");
+    return;
+  }
+
+  if (cmd.pipeline.m_type != ResourceType::Pipeline) {
+    Log::warn("tried to submit compute command with non-pipeline RID");
+    return;
+  }
+
+  if (!cmd.descriptor_set.is_valid()) {
+    Log::warn("tried to submit compute command with invalid descriptor set");
+    return;
+  }
+
+  if (cmd.descriptor_set.m_type != ResourceType::DescriptorSet) {
+    Log::warn("tried to submit compute command with non-descriptor-set RID");
+    return;
+  }
+
+  m_computeCmds.emplace(cmd);
+}
+
+void Engine::dispatch() {
+  if (m_computeCmds.empty()) {
+    Log::warn("tried to dispatch 0 compute commands");
+    return;
+  }
+
+  vk::CommandBuffer cmdBuf = nullptr;
+
+  while (!m_computeCmds.empty()) {
+    ComputeCommand cmd = m_computeCmds.front();
+    m_computeCmds.pop();
+
+    if (cmdBuf == nullptr)
+      cmdBuf = m_context->beginDispatch();
+    else if (cmd.barrier) {
+      m_context->endDispatch(cmdBuf);
+      cmdBuf = m_context->beginDispatch();
+    }
+
+    PipelineHandle * pipeline = reinterpret_cast<PipelineHandle *>(m_resources.at(cmd.pipeline));
+    DescriptorSetHandle * set = reinterpret_cast<DescriptorSetHandle *>(m_resources.at(cmd.descriptor_set));
+
+    cmdBuf.bindPipeline(vk::PipelineBindPoint::eCompute, pipeline->pipeline);
+
+    cmdBuf.bindDescriptorSets(
+      vk::PipelineBindPoint::eCompute,
+      pipeline->layout,
+      0,
+      1,
+      &set->set,
+      0,
+      nullptr
+    );
+
+    cmdBuf.pushConstants<uint8_t>(
+      pipeline->layout,
+      vk::ShaderStageFlagBits::eCompute,
+      0,
+      cmd.push_constants
+    );
+
+    auto [x, y, z] = cmd.work_groups;
+    cmdBuf.dispatch(x, y, z);
+  }
+
+  m_context->endDispatch(cmdBuf);
 }
 
 void Engine::updateTimes() {

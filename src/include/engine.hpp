@@ -7,9 +7,9 @@
 #include <string>
 #include <unordered_map>
 #include <functional>
+#include <queue>
 #include <set>
 #include <vector>
-#include <vulkan/vulkan.hpp>
 
 class GLFWwindow;
 
@@ -20,7 +20,7 @@ class VulkanContext;
 class ShaderCompiler;
 
 class alignas(64) Engine {
-  Settings m_settings = Settings{};
+  Settings m_settings;
   GLFWwindow * m_window = nullptr;
   VulkanContext * m_context = nullptr;
   Allocator * m_allocator = nullptr;
@@ -28,8 +28,10 @@ class alignas(64) Engine {
 
   unsigned long m_nextRID = 0;
   std::unordered_map<RID, unsigned long, RID::Hash> m_resources;
-  std::set<RID> m_busySamplers = {};
-  std::set<unsigned long> m_storageTextures = {};
+  std::set<RID> m_busySamplers;
+  std::set<unsigned long> m_storageTextures;
+
+  std::queue<ComputeCommand> m_computeCmds;
 
   double m_frameTime = 0.0;
   double m_time = 0.0;
@@ -100,6 +102,9 @@ class alignas(64) Engine {
     RID create_compute_pipeline(const RID&, const RID&);
     RID create_graphics_pipeline(const GraphicsPipelineShaders&, const RID&, const GraphicsPipelineSettings&);
     void destroy_pipeline(RID&);
+
+    void compute_command(const ComputeCommand&);
+    void dispatch();
 
   private:
     void updateTimes();

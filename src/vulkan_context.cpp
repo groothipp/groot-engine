@@ -60,6 +60,7 @@ VulkanContext::VulkanContext(const std::string& applicationName, const unsigned 
 
 VulkanContext::~VulkanContext() {
   m_device.destroyCommandPool(m_transferCmdPool);
+  m_device.destroyCommandPool(m_computeCmdPool);
   m_device.destroy();
   m_instance.destroySurfaceKHR(m_surface);
   m_instance.destroy();
@@ -102,36 +103,64 @@ bool VulkanContext::supportsAnisotropy() const {
 }
 
 vk::CommandBuffer VulkanContext::beginTransfer() const {
-
-  vk::CommandBuffer cmdBuffer = m_device.allocateCommandBuffers(vk::CommandBufferAllocateInfo{
+  vk::CommandBuffer cmdBuf = m_device.allocateCommandBuffers(vk::CommandBufferAllocateInfo{
     .commandPool        = m_transferCmdPool,
     .level              = vk::CommandBufferLevel::ePrimary,
     .commandBufferCount = 1
   })[0];
 
-  cmdBuffer.begin(vk::CommandBufferBeginInfo{});
-  return cmdBuffer;
+  cmdBuf.begin(vk::CommandBufferBeginInfo{});
+  return cmdBuf;
 }
 
-void VulkanContext::endTransfer(const vk::CommandBuffer& cmdBuffer) const {
-  cmdBuffer.end();
+void VulkanContext::endTransfer(const vk::CommandBuffer& cmdBuf) const {
+  cmdBuf.end();
 
   vk::SubmitInfo submitInfo{
     .commandBufferCount = 1,
-    .pCommandBuffers    = &cmdBuffer
+    .pCommandBuffers    = &cmdBuf
   };
 
   vk::Fence fence = m_device.createFence({});
   m_transferQueue.submit(submitInfo, fence);
-  if (m_device.waitForFences(fence, true, 1000000000) != vk::Result::eSuccess) {
-    m_device.freeCommandBuffers(m_transferCmdPool, cmdBuffer);
-    Log::runtime_error("hung waiting for transfer");
-  }
+  vk::Result res = m_device.waitForFences(fence, true, 1000000000);
 
-  m_device.freeCommandBuffers(m_transferCmdPool, cmdBuffer);
+  m_device.freeCommandBuffers(m_transferCmdPool, cmdBuf);
   m_device.destroyFence(fence);
+
+  if (res != vk::Result::eSuccess)
+    Log::runtime_error("hung waiting for transfer");
 }
 
+vk::CommandBuffer VulkanContext::beginDispatch() const {
+  vk::CommandBuffer cmdBuf = m_device.allocateCommandBuffers(vk::CommandBufferAllocateInfo{
+    .commandPool        = m_computeCmdPool,
+    .level              = vk::CommandBufferLevel::ePrimary,
+    .commandBufferCount = 1
+  })[0];
+
+  cmdBuf.begin(vk::CommandBufferBeginInfo{});
+  return cmdBuf;
+}
+
+void VulkanContext::endDispatch(const vk::CommandBuffer& cmdBuf) const {
+  cmdBuf.end();
+
+  vk::SubmitInfo submitInfo{
+    .commandBufferCount = 1,
+    .pCommandBuffers    = &cmdBuf
+  };
+
+  vk::Fence fence = m_device.createFence({});
+  m_computeQueue.submit(submitInfo, fence);
+  vk::Result res = m_device.waitForFences(fence, true, 1000000000);
+
+  m_device.freeCommandBuffers(m_computeCmdPool, cmdBuf);
+  m_device.destroyFence(fence);
+
+  if (res != vk::Result::eSuccess)
+    Log::runtime_error("hung waiting for compute dispatch");
+}
 
 void VulkanContext::createSurface(GLFWwindow * window) {
   VkSurfaceKHR rawSurface = nullptr;
@@ -217,6 +246,11 @@ void VulkanContext::createCommandPools() {
   m_transferCmdPool = m_device.createCommandPool(vk::CommandPoolCreateInfo{
     .flags            = vk::CommandPoolCreateFlagBits::eTransient,
     .queueFamilyIndex = (m_queueFamilyIndices >> TRANSFER_SHIFT) & 0xFF
+  });
+
+  m_computeCmdPool = m_device.createCommandPool(vk::CommandPoolCreateInfo{
+    .flags            = vk::CommandPoolCreateFlagBits::eTransient,
+    .queueFamilyIndex = (m_queueFamilyIndices >> COMPUTE_SHIFT) & 0xFF
   });
 }
 

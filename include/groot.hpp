@@ -1,7 +1,9 @@
 #pragma once
 
+#include <cstdint>
 #include <functional>
 #include <set>
+#include <queue>
 #include <string>
 #include <unordered_map>
 
@@ -215,8 +217,16 @@ struct SamplerSettings {
   bool anisotropic_filtering = true;
 };
 
+struct ComputeCommand {
+  RID pipeline = RID();
+  RID descriptor_set = RID();
+  std::vector<uint8_t> push_constants;
+  bool barrier = false;
+  std::tuple<unsigned int, unsigned int, unsigned int> work_groups = { 1, 1, 1 };
+};
+
 class alignas(64) Engine {
-  Settings m_settings = Settings{};
+  Settings m_settings;
   GLFWwindow * m_window = nullptr;
   VulkanContext * m_context = nullptr;
   Allocator * m_allocator = nullptr;
@@ -224,7 +234,9 @@ class alignas(64) Engine {
 
   unsigned long m_nextRID = 0;
   std::unordered_map<RID, unsigned long, RID::Hash> m_resources;
-  std::set<RID> m_busySamplers = {};
+  std::set<RID> m_busySamplers;
+
+  std::queue<ComputeCommand> m_computeCmds;
 
   double m_frameTime = 0.0;
   double m_time = 0.0;
@@ -295,6 +307,9 @@ class alignas(64) Engine {
     RID create_compute_pipeline(const RID&, const RID&);
     RID create_graphics_pipeline(const GraphicsPipelineShaders&, const RID&, const GraphicsPipelineSettings&);
     void destroy_pipeline(RID&);
+
+    void compute_command(const ComputeCommand&);
+    void dispatch();
 
   private:
     void updateTimes();
