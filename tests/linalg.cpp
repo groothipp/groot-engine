@@ -1,11 +1,122 @@
 #include "include/groot.hpp"
 
 #include <catch2/catch_test_macros.hpp>
+
+#include <numbers>
 #include <print>
 
 #define TOLERANCE 1e-6
 
 using namespace groot;
+
+TEST_CASE( "operator[] access" ) {
+  SECTION( "vec2" ) {
+    std::println("--- vec2 access ---");
+
+    vec2 u(1.0f);
+
+    REQUIRE( u.x == u[0] );
+    REQUIRE( u.y == u[1] );
+
+    CHECK( u.x == 1.0f );
+    CHECK( u.y == 1.0f );
+
+    bool caught_out_of_range = false;
+    try {
+      static_cast<void>(u[4]);
+    }
+    catch (const std::exception& e) {
+      caught_out_of_range = true;
+    }
+
+    CHECK( caught_out_of_range );
+  }
+
+  SECTION( "vec3" ) {
+    std::println("--- vec3 access ---");
+
+    vec3 u(1.0f);
+
+    REQUIRE( u.x == u[0] );
+    REQUIRE( u.y == u[1] );
+    REQUIRE( u.z == u[2] );
+
+    CHECK( u.x == 1.0f );
+    CHECK( u.y == 1.0f );
+    CHECK( u.z == 1.0f );
+
+    bool caught_out_of_range = false;
+    try {
+      static_cast<void>(u[4]);
+    }
+    catch (const std::exception& e) {
+      caught_out_of_range = true;
+    }
+
+    CHECK( caught_out_of_range );
+  }
+
+  SECTION( "vec4" ) {
+    std::println("--- vec4 access ---");
+
+    vec4 u(1.0f);
+
+    REQUIRE( u.x == u[0] );
+    REQUIRE( u.y == u[1] );
+
+    CHECK( u.x == 1.0f );
+    CHECK( u.y == 1.0f );
+
+    bool caught_out_of_range = false;
+    try {
+      static_cast<void>(u[4]);
+    }
+    catch (const std::exception& e) {
+      caught_out_of_range = true;
+    }
+
+    CHECK( caught_out_of_range );
+  }
+
+  SECTION( "mat2" ) {
+    std::println("--- mat2 access ---");
+
+    mat2 m = mat2::identity();
+
+    CHECK( m[0] == vec2(1.0f, 0.0f) );
+    CHECK( m[1] == vec2(0.0f, 1.0f) );
+
+    bool caught_out_of_range = false;
+    try {
+      static_cast<void>(m[4]);
+    }
+    catch (const std::exception& e) {
+      caught_out_of_range = true;
+    }
+
+    CHECK( caught_out_of_range );
+  }
+
+  SECTION( "mat3" ) {
+    std::println("--- mat3 access ---");
+
+    mat3 m = mat3::identity();
+
+    CHECK( m[0] == vec3(1.0f, 0.0f, 0.0f) );
+    CHECK( m[1] == vec3(0.0f, 1.0f, 0.0f) );
+    CHECK( m[2] == vec3(0.0f, 0.0f, 1.0f) );
+
+    bool caught_out_of_range = false;
+    try {
+      static_cast<void>(m[4]);
+    }
+    catch (const std::exception& e) {
+      caught_out_of_range = true;
+    }
+
+    CHECK( caught_out_of_range );
+  }
+}
 
 TEST_CASE( "comparison" ) {
   SECTION( "vec2") {
@@ -39,6 +150,28 @@ TEST_CASE( "comparison" ) {
 
     CHECK( u == v );
     CHECK( u != w );
+  }
+
+  SECTION( "mat2" ) {
+    std::println("--- mat2 comparison ---");
+
+    mat2 a = mat2::identity();
+    mat2 b = mat2::identity();
+    mat2 c;
+
+    CHECK( a == b );
+    CHECK( a != c );
+  }
+
+  SECTION( "mat3" ) {
+    std::println("--- mat3 comparison ---");
+
+    mat3 a = mat3::identity();
+    mat3 b = mat3::identity();
+    mat3 c;
+
+    CHECK( a == b );
+    CHECK( a != c );
   }
 }
 
@@ -119,6 +252,26 @@ TEST_CASE( "addition" ) {
 
     CHECK( u + v == w );
   }
+
+  SECTION( "mat2" ) {
+    std::println("--- mat2 addition ---");
+
+    mat2 a(1.0f);
+    mat2 b(1.0f);
+    mat2 c(2.0f);
+
+    CHECK( a + b == c );
+  }
+
+  SECTION( "mat3" ) {
+    std::println("--- mat3 addition ---");
+
+    mat3 a(1.0f);
+    mat3 b(1.0f);
+    mat3 c(2.0f);
+
+    CHECK( a + b == c );
+  }
 }
 
 TEST_CASE( "subtraction" ) {
@@ -154,6 +307,24 @@ TEST_CASE( "subtraction" ) {
     CHECK( u - v == w );
     CHECK( u - v == -(v - u));
   }
+
+  SECTION( "mat2" ) {
+    std::println("--- mat2 subtraction ---");
+
+    mat2 a(2.0f);
+    mat2 b(1.0f);
+
+    CHECK( a - b == b );
+  }
+
+  SECTION( "mat3" ) {
+    std::println("--- mat3 subtraction ---");
+
+    mat3 a(2.0f);
+    mat3 b(1.0f);
+
+    CHECK( a - b == b );
+  }
 }
 
 TEST_CASE( "negation" ) {
@@ -185,6 +356,26 @@ TEST_CASE( "negation" ) {
 
     CHECK( -u == v );
     CHECK( -v == u );
+  }
+
+  SECTION( "mat2" ) {
+    std::println("--- mat2 negation ---");
+
+    mat2 a(1.0f);
+    mat2 b(-1.0f);
+
+    CHECK( -a == b );
+    CHECK( -b == a );
+  }
+
+  SECTION( "mat3" ) {
+    std::println("--- mat3 negation ---");
+
+    mat3 a(1.0f);
+    mat3 b(-1.0f);
+
+    CHECK( -a == b );
+    CHECK( -b == a );
   }
 }
 
@@ -245,6 +436,63 @@ TEST_CASE( "multiplication" ) {
 
     CHECK( u * v == v );
   }
+
+  SECTION( "mat2 mat mult" ) {
+    std::println("--- mat2 matrix multiplication ---");
+
+    mat2 a(2.0f);
+    mat2 b = mat2::identity();
+
+    CHECK( a * b == a );
+    CHECK( b * a == a );
+  }
+
+  SECTION( "mat2 vec mult" ) {
+    std::println("--- mat2 vector multiplication ---");
+
+    mat2 m = 2.0f * mat2::identity();
+    vec2 u(1.0f);
+    vec2 v(2.0f);
+
+    CHECK( m * u == v );
+  }
+
+  SECTION( "mat2 scalar mult" ) {
+    std::println("--- mat2 scalar multiplication ---");
+
+    mat2 a = 2.0f * mat2::identity();
+    mat2 b = mat2(vec2(2.0f, 0.0f), vec2(0.0f, 2.0f));
+
+    CHECK( a == b );
+  }
+
+  SECTION( "mat3 mat mult" ) {
+    std::println("--- mat3 matrix multiplication ---");
+
+    mat3 a(2.0f);
+    mat3 b = mat3::identity();
+
+    CHECK( a * b == a );
+    CHECK( b * a == a );
+  }
+
+  SECTION( "mat3 vec mult" ) {
+    std::println("--- mat3 vector multiplication ---");
+
+    mat3 m = 2.0f * mat3::identity();
+    vec3 u = vec3(1.0f);
+    vec3 v = vec3(2.0f);
+
+    CHECK( m * u == v );
+  }
+
+  SECTION( "mat3 scalar mult" ) {
+    std::println("--- mat3 scalar mult ---");
+
+    mat3 m(2.0f);
+
+    CHECK( 2.0f * m == mat3(4.0f) );
+  }
 }
 
 TEST_CASE( "division" ) {
@@ -303,6 +551,22 @@ TEST_CASE( "division" ) {
     vec4 v(1.0f);
 
     CHECK( u / v == u );
+  }
+
+  SECTION( "mat2 scalar div" ) {
+    std::println("--- mat2 scalar division ---");
+
+    mat2 m = 2.0f * mat2::identity();
+
+    CHECK( m / 2.0f == mat2::identity() );
+  }
+
+  SECTION( "mat3 scalar div" ) {
+    std::println("--- mat3 scalar division ---");
+
+    mat3 m(2.0f);
+
+    CHECK( m / 2.0f == mat3(1.0f) );
   }
 }
 
@@ -399,6 +663,8 @@ TEST_CASE( "magnitude squared" ) {
 
 TEST_CASE( "normalized" ) {
   SECTION( "vec2" ) {
+    std::println("--- vec2 normalized ---");
+
     vec2 u(3.0f, 4.0f);
     vec2 v(3.0f / 5.0f, 4.0f / 5.0f);
     vec2 w = u.normalized();
@@ -409,6 +675,8 @@ TEST_CASE( "normalized" ) {
   }
 
   SECTION( "vec3" ) {
+    std::println("--- vec3 normalized ---");
+
     vec3 u(2.0f, 3.0f, 6.0f);
     vec3 v(2.0f / 7.0f, 3.0f / 7.0f, 6.0f / 7.0f);
     vec3 w = u.normalized();
@@ -419,6 +687,8 @@ TEST_CASE( "normalized" ) {
   }
 
   SECTION( "vec4" ) {
+    std::println("--- vec4 normalized ---");
+
     vec4 u(1.0f, 3.0f, 5.0f, 17.0f);
     vec4 v(1.0f / 18.0f, 3.0f / 18.0f, 5.0f / 18.0f, 17.0f / 18.0f);
     vec4 w = u.normalized();
@@ -426,5 +696,219 @@ TEST_CASE( "normalized" ) {
 
     CHECK( w == v );
     CHECK( err < TOLERANCE );
+  }
+}
+
+TEST_CASE( "inverse" ) {
+  SECTION( "mat2" ) {
+    std::println("--- mat2 inverse ---");
+
+    mat2 a = mat2::identity();
+    mat2 b = 2.0f * mat2::identity();
+
+    CHECK( a.inverse() == a );
+    CHECK( b.inverse() == 0.5 * mat2::identity() );
+  }
+
+  SECTION( "mat3" ) {
+    std::println("--- mat3 inverse ---");
+
+    mat3 a = mat3::identity();
+    mat3 b = 2.0f * mat3::identity();
+
+    CHECK( a.inverse() == a );
+    CHECK( b.inverse() == 0.5 * mat3::identity() );
+  }
+}
+
+TEST_CASE( "transpose" ) {
+  SECTION( "mat2" ) {
+    std::println("--- mat2 transpose ---");
+
+    mat2 a(vec2(1.0f, 2.0f), vec2(1.0f, 2.0f));
+    mat2 b(vec2(1.0f, 1.0), vec2(2.0f, 2.0f));
+    mat2 c = mat2::identity();
+
+    CHECK( a.transpose() == b );
+    CHECK( c.transpose() == c );
+  }
+
+  SECTION( "mat3" ) {
+    std::println("--- mat3 transpose ---");
+
+    mat3 a(vec3(1.0f, 2.0f, 3.0f), vec3(1.0f, 2.0f, 3.0f), vec3(1.0f, 2.0f, 3.0f));
+    mat3 b(vec3(1.0f, 1.0f, 1.0f), vec3(2.0f, 2.0f, 2.0f), vec3(3.0f, 3.0f, 3.0f));
+    mat3 c = mat3::identity();
+
+    CHECK( a.transpose() == b );
+    CHECK( c.transpose() == c );
+  }
+}
+
+TEST_CASE( "determinant" ) {
+  SECTION( "mat2" ) {
+    std::println("--- mat2 determinant ---");
+
+    mat2 a = mat2::identity();
+    mat2 b(1.0f);
+    mat2 c(vec2(1.0f, 2.0f), vec2(3.0f, 4.0f));
+
+    CHECK( a.determinant() == 1.0f );
+    CHECK( b.determinant() == 0.0f );
+    CHECK( c.determinant() == -2.0f );
+  }
+
+  SECTION( "mat3" ) {
+    std::println("--- mat3 determiniant ---");
+
+    mat3 a = mat3::identity();
+    mat3 b(1.0f);
+    mat3 c(vec3(1.0f, 1.0f, 3.0f), vec3(1.0f, 3.0f, 2.0f), vec3(1.0f, 2.0f, 1.0f));
+
+    CHECK( a.determinant() == 1.0f );
+    CHECK( b.determinant() == 0.0f );
+    CHECK( c.determinant() == -3.0f );
+  }
+}
+
+TEST_CASE( "trace" ) {
+  SECTION( "mat2") {
+    std::println("--- mat2 trace ---");
+    CHECK( mat2(1.0f).trace() == 2.0f );
+  }
+
+  SECTION( "mat3" ) {
+    std::println("--- mat3 trace ---");
+    CHECK( mat3(1.0f).trace() == 3.0f );
+  }
+}
+
+TEST_CASE( "identity" ) {
+  SECTION( "mat2" ) {
+    std::println("--- mat2 identity ---");
+
+    mat2 m = mat2::identity();
+
+    for (int i = 0; i < 2; ++i) {
+      for (int j = 0; j < 2; ++j)
+        CHECK( m[i][j] == (i == j) );
+    }
+  }
+
+  SECTION( "mat3" ) {
+    std::println("--- mat3 identity ---");
+
+    mat3 m = mat3::identity();
+
+    for (int i = 0; i < 3; ++i) {
+      for (int j = 0; j < 3; ++j)
+        CHECK( m[i][j] == (i == j));
+    }
+  }
+}
+
+TEST_CASE( "rotation" ) {
+  SECTION( "mat2" ) {
+    std::println("--- mat2 rotation ---");
+
+    mat2 m = mat2::rotation(std::numbers::pi_v<float> / 2.0f);
+    vec2 u(1.0f, 0.0f);
+    vec2 result = m * u;
+    vec2 expected(0.0f, 1.0f);
+
+    CHECK( mat2::rotation(0.0f) == mat2::identity() );
+    CHECK( (result - expected).mag() < TOLERANCE );
+  }
+
+  SECTION( "mat3 axis rotations" ) {
+    std::println("--- mat3 axis rotations ---");
+
+    mat3 rx = mat3::rotation_x(std::numbers::pi_v<float> / 2.0f);
+    vec3 y_axis(0.0f, 1.0f, 0.0f);
+    vec3 result_x = rx * y_axis;
+    vec3 expected_x(0.0f, 0.0f, 1.0f);
+
+    mat3 ry = mat3::rotation_y(std::numbers::pi_v<float> / 2.0f);
+    vec3 z_axis(0.0f, 0.0f, 1.0f);
+    vec3 result_y = ry * z_axis;
+    vec3 expected_y(1.0f, 0.0f, 0.0f);
+
+    mat3 rz = mat3::rotation_z(std::numbers::pi_v<float> / 2.0f);
+    vec3 x_axis(1.0f, 0.0f, 0.0f);
+    vec3 result_z = rz * x_axis;
+    vec3 expected_z(0.0f, 1.0f, 0.0f);
+
+    CHECK( mat3::rotation_x(0.0f) == mat3::identity() );
+    CHECK( mat3::rotation_y(0.0f) == mat3::identity() );
+    CHECK( mat3::rotation_z(0.0f) == mat3::identity() );
+
+    CHECK( (result_x - expected_x).mag() < TOLERANCE );
+    CHECK( (result_y - expected_y).mag() < TOLERANCE );
+    CHECK( (result_z - expected_z).mag() < TOLERANCE );
+  }
+
+  SECTION( "mat3 axis-angle rotation" ) {
+    std::println("--- mat3 axis-angle rotation ---");
+
+    vec3 z_axis(0.0f, 0.0f, 1.0f);
+    mat3 rot_z = mat3::rotation(z_axis, std::numbers::pi_v<float> / 2.0f);
+    mat3 expected_z = mat3::rotation_z(std::numbers::pi_v<float> / 2.0f);
+
+    vec3 diagonal(1.0f, 1.0f, 1.0f);
+    mat3 rot_diag = mat3::rotation(diagonal, std::numbers::pi_v<float> / 4.0f);
+    vec3 test_vec(1.0f, 0.0f, 0.0f);
+    vec3 result = rot_diag * test_vec;
+
+    mat3 identity_rot = mat3::rotation(vec3(1.0f, 0.0f, 0.0f), 0.0f);
+
+    CHECK( (rot_z[0] - expected_z[0]).mag() < TOLERANCE );
+    CHECK( (rot_z[1] - expected_z[1]).mag() < TOLERANCE );
+    CHECK( (rot_z[2] - expected_z[2]).mag() < TOLERANCE );
+    CHECK( (identity_rot[0] - mat3::identity()[0]).mag() < TOLERANCE );
+    CHECK( (identity_rot[1] - mat3::identity()[1]).mag() < TOLERANCE );
+    CHECK( (identity_rot[2] - mat3::identity()[2]).mag() < TOLERANCE );
+    CHECK( result.mag() - 1.0f < TOLERANCE );
+  }
+
+  SECTION( "mat3 euler rotation" ) {
+    std::println("--- mat3 euler rotation ---");
+
+    float pitch = std::numbers::pi_v<float> / 6.0f;
+    float yaw = std::numbers::pi_v<float> / 4.0f;
+    float roll = std::numbers::pi_v<float> / 3.0f;
+
+    mat3 euler = mat3::euler_rotation(pitch, yaw, roll);
+    mat3 composed = mat3::rotation_z(roll) * mat3::rotation_x(pitch) * mat3::rotation_y(yaw);
+
+    CHECK( (euler[0] - composed[0]).mag() < TOLERANCE );
+    CHECK( (euler[1] - composed[1]).mag() < TOLERANCE );
+    CHECK( (euler[2] - composed[2]).mag() < TOLERANCE );
+
+    mat3 zero_euler = mat3::euler_rotation(0.0f, 0.0f, 0.0f);
+    CHECK( (zero_euler[0] - mat3::identity()[0]).mag() < TOLERANCE );
+    CHECK( (zero_euler[1] - mat3::identity()[1]).mag() < TOLERANCE );
+    CHECK( (zero_euler[2] - mat3::identity()[2]).mag() < TOLERANCE );
+
+    mat3 pitch_only = mat3::euler_rotation(pitch, 0.0f, 0.0f);
+    mat3 expected_pitch = mat3::rotation_x(pitch);
+    CHECK( (pitch_only[0] - expected_pitch[0]).mag() < TOLERANCE );
+    CHECK( (pitch_only[1] - expected_pitch[1]).mag() < TOLERANCE );
+    CHECK( (pitch_only[2] - expected_pitch[2]).mag() < TOLERANCE );
+  }
+}
+
+TEST_CASE( "scale" ) {
+  SECTION( "mat2" ) {
+    std::println("--- mat2 scale ---");
+
+    CHECK( mat2::scale(1.0f, 1.0f) == mat2::identity() );
+    CHECK( mat2::scale(2.0f, 2.0f) * vec2(1.0f, 1.0f) == vec2(2.0f, 2.0f) );
+  }
+
+  SECTION( "mat3" ) {
+    std::println("--- mat3 scale ---");
+
+    CHECK( mat3::scale(1.0f, 1.0f, 1.0f) == mat3::identity() );
+    CHECK( mat3::scale(2.0f, 3.0f, 4.0f) * vec3(1.0f, 1.0f, 1.0f) == vec3(2.0f, 3.0f, 4.0f) );
   }
 }

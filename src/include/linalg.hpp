@@ -1,5 +1,7 @@
 #pragma once
 
+#include "src/include/log.hpp"
+
 #include <cmath>
 #include <compare>
 
@@ -23,6 +25,26 @@ struct Vec2 {
   inline Vec2& operator=(const Vec2&) = default;
   inline Vec2& operator=(Vec2&&) = default;
 
+  inline T& operator[](unsigned int index) {
+    switch (index) {
+      case 0: return x;
+      case 1: return y;
+      default:
+        Log::out_of_range("vec2 access out of range");
+        return x;
+    }
+  }
+
+  inline const T& operator[](unsigned int index) const {
+    switch(index) {
+      case 0:   return x;
+      case 1:   return y;
+      default:
+        Log::out_of_range("vec2 access out of range");
+        return x;
+    }
+  }
+
   inline std::partial_ordering operator<=>(const Vec2&) const = default;
 
   inline Vec2 operator+(const Vec2& rhs) const { return Vec2(x + rhs.x, y + rhs.y); }
@@ -33,10 +55,10 @@ struct Vec2 {
   inline Vec2 operator/(const Vec2& rhs) const { return Vec2( x / rhs.x, y / rhs.y ); }
   inline Vec2 operator/(T s) const { return Vec2(x / s, y / s); }
 
-  inline double dot(const Vec2& vec) const { return x * vec.x + y * vec.y; }
-  inline double mag() const { return std::sqrt(dot(*this)); }
-  inline double mag_squared() const { return dot(*this); }
-  inline Vec2<float> normalized() const { return *this / mag(); }
+  inline T dot(const Vec2& vec) const { return x * vec.x + y * vec.y; }
+  inline T mag() const { return std::sqrt(dot(*this)); }
+  inline T mag_squared() const { return dot(*this); }
+  inline Vec2 normalized() const { return *this / mag(); }
 };
 
 template <typename T>
@@ -58,6 +80,28 @@ struct Vec3 {
   inline Vec3& operator=(const Vec3&) = default;
   inline Vec3& operator=(Vec3&&) = default;
 
+  inline T& operator[](unsigned int index) {
+    switch (index) {
+      case 0: return x;
+      case 1: return y;
+      case 2: return z;
+      default:
+        Log::out_of_range("vec3 access out of range");
+        return x;
+    }
+  }
+
+  inline const T& operator[](unsigned int index) const {
+    switch (index) {
+      case 0: return x;
+      case 1: return y;
+      case 2: return z;
+      default:
+        Log::out_of_range("vec3 access out of range");
+        return x;
+    }
+  }
+
   inline std::partial_ordering operator<=>(const Vec3&) const = default;
 
   inline Vec3 operator+(const Vec3& rhs) const { return Vec3(x + rhs.x, y + rhs.y, z + rhs.z); }
@@ -68,10 +112,10 @@ struct Vec3 {
   inline Vec3 operator/(const Vec3& rhs) const { return Vec3(x / rhs.x, y / rhs.y, z / rhs.z); }
   inline Vec3 operator/(T rhs) const { return Vec3(x / rhs, y / rhs, z / rhs); }
 
-  inline double dot(const Vec3& vec) const { return x * vec.x + y * vec.y + z * vec.z; }
+  inline T dot(const Vec3& vec) const { return x * vec.x + y * vec.y + z * vec.z; }
   inline Vec3 cross(const Vec3& vec) const { return Vec3(y * vec.z - vec.z * y, z * vec.x - x * vec.z, x * vec.y - y * vec.x); }
-  inline double mag() const { return std::sqrt(dot(*this)); }
-  inline double mag_squared() const { return dot(*this); }
+  inline T mag() const { return std::sqrt(dot(*this)); }
+  inline T mag_squared() const { return dot(*this); }
   inline Vec3 normalized() const { return *this / mag(); }
 };
 
@@ -95,6 +139,30 @@ struct Vec4 {
   inline Vec4& operator=(const Vec4&) = default;
   inline Vec4& operator=(Vec4&&) = default;
 
+  inline T& operator[](unsigned int index) {
+    switch (index) {
+      case 0: return x;
+      case 1: return y;
+      case 2: return z;
+      case 3: return w;
+      default:
+        Log::out_of_range("vec3 access out of range");
+        return x;
+    }
+  }
+
+  inline const T& operator[](unsigned int index) const {
+    switch (index) {
+      case 0: return x;
+      case 1: return y;
+      case 2: return z;
+      case 3: return w;
+      default:
+        Log::out_of_range("vec3 access out of range");
+        return x;
+    }
+  }
+
   inline std::partial_ordering operator<=>(const Vec4&) const = default;
 
   inline Vec4 operator+(const Vec4& rhs) const { return Vec4(x + rhs.x, y + rhs.y, z + rhs.z, w + rhs.w); }
@@ -105,14 +173,10 @@ struct Vec4 {
   inline Vec4 operator/(const Vec4& rhs) const { return Vec4(x / rhs.x, y / rhs.y, z / rhs.z, w / rhs.w); }
   inline Vec4 operator/(T rhs) const { return Vec4(x / rhs, y / rhs, z / rhs, w / rhs); }
 
-  inline double dot(const Vec4& vec) const { return x * vec.x + y * vec.y + z * vec.z + w * vec.w; }
-  inline double mag() const { return std::sqrt(dot(*this)); }
-  inline double mag_squared() const { return dot(*this); }
+  inline T dot(const Vec4& vec) const { return x * vec.x + y * vec.y + z * vec.z + w * vec.w; }
+  inline T mag() const { return std::sqrt(dot(*this)); }
+  inline T mag_squared() const { return dot(*this); }
   inline Vec4 normalized() const { return *this / mag(); }
-};
-
-struct Mat4 {
-
 };
 
 } // namespace groot::detail
@@ -128,6 +192,91 @@ using uvec3 = detail::Vec3<unsigned int>;
 using vec4  = detail::Vec4<float>;
 using ivec4 = detail::Vec4<int>;
 using uvec4 = detail::Vec4<unsigned int>;
+
+class mat2 {
+  vec2 m_col1, m_col2;
+
+  public:
+    mat2() = default;
+    explicit mat2(float);
+    mat2(const vec2&, const vec2&);
+    mat2(const mat2&) = default;
+    mat2(mat2&&) = default;
+
+    ~mat2() = default;
+
+    mat2& operator=(const mat2&) = default;
+    mat2& operator=(mat2&&) = default;
+
+    vec2& operator[](unsigned int);
+    const vec2& operator[](unsigned int) const;
+
+    std::partial_ordering operator<=>(const mat2&) const = default;
+
+    mat2 operator+(const mat2&) const;
+    mat2 operator-(const mat2&) const;
+    mat2 operator-() const;
+    mat2 operator*(const mat2&) const;
+    vec2 operator*(const vec2&) const;
+    mat2 operator*(float) const;
+    mat2 operator/(float) const;
+
+    mat2 inverse() const;
+    mat2 transpose() const;
+    float determinant() const;
+    float trace() const;
+
+    static mat2 identity();
+    static mat2 rotation(float);
+    static mat2 scale(float, float);
+};
+
+class mat3 {
+  vec3 m_col1, m_col2, m_col3;
+
+  public:
+    mat3() = default;
+    explicit mat3(float);
+    mat3(const vec3&, const vec3&, const vec3&);
+    mat3(const mat2&, float s = 0);
+    mat3(const mat3&) = default;
+    mat3(mat3&&) = default;
+
+    ~mat3() = default;
+
+    mat3& operator=(const mat3&) = default;
+    mat3& operator=(mat3&&) = default;
+
+    vec3& operator[](unsigned int);
+    const vec3& operator[](unsigned int) const;
+
+    std::partial_ordering operator<=>(const mat3&) const = default;
+
+    mat3 operator+(const mat3&) const;
+    mat3 operator-(const mat3&) const;
+    mat3 operator-() const;
+    mat3 operator*(const mat3&) const;
+    vec3 operator*(const vec3&) const;
+    mat3 operator*(float) const;
+    mat3 operator/(float) const;
+
+    mat3 inverse() const;
+    mat3 transpose() const;
+    float determinant() const;
+    float trace() const;
+
+    static mat3 identity();
+    static mat3 rotation_x(float);
+    static mat3 rotation_y(float);
+    static mat3 rotation_z(float);
+    static mat3 rotation(const vec3&, float);
+    static mat3 euler_rotation(float, float, float);
+    static mat3 scale(float, float, float);
+};
+
+class mat4 {
+
+};
 
 } // namespace groot
 
@@ -167,3 +316,10 @@ inline groot::uvec4 operator*(unsigned int lhs, const groot::uvec4& rhs) {
   return rhs * lhs;
 }
 
+inline groot::mat2 operator*(float lhs, const groot::mat2& rhs) {
+  return rhs * lhs;
+}
+
+inline groot::mat3 operator*(float lhs, const groot::mat3& rhs) {
+  return rhs * lhs;
+}

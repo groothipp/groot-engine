@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 4.2)
 option(ENABLE_ASAN "Enable Address Sanitizer" OFF)
 
 set(GROOT_VERSION_MAJOR 2)
-set(GROOT_VERSION_MINOR 46)
+set(GROOT_VERSION_MINOR 54)
 set(GROOT_VERSION_PATCH 12)
 
 project(GrootEngine
