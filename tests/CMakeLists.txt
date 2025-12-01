@@ -9,6 +9,7 @@ set(TESTS_SOURCES
   ${CMAKE_CURRENT_SOURCE_DIR}/descriptor_sets.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/dispatch.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/images.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/linalg.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/pipelines.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/shader_compilation.cpp
 )

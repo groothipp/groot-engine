@@ -1,5 +1,4 @@
 #include "src/include/log.hpp"
-#include "vulkan/vulkan.hpp"
 #include "src/include/vulkan_context.hpp"
 
 #include <vulkan/vulkan_beta.h>
@@ -88,6 +87,10 @@ const vk::PhysicalDevice& VulkanContext::gpu() const {
 
 const vk::Device& VulkanContext::device() const {
   return m_device;
+}
+
+const vk::SurfaceKHR& VulkanContext::surface() const {
+  return m_surface;
 }
 
 bool VulkanContext::supportsTesselation() const {

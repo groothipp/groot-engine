@@ -35,6 +35,7 @@ class VulkanContext {
     const vk::Instance& instance() const;
     const vk::PhysicalDevice& gpu() const;
     const vk::Device& device() const;
+    const vk::SurfaceKHR& surface() const;
     bool supportsTesselation() const;
     bool supportsNonSolidMesh() const;
     bool supportsAnisotropy() const;

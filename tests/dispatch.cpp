@@ -5,7 +5,7 @@
 using namespace groot;
 
 TEST_CASE( "compute dispatch" ) {
-  std::print("--- compute dispatch ---");
+  std::println("--- compute dispatch ---");
 
   Engine engine;
 
@@ -59,11 +59,11 @@ TEST_CASE( "compute dispatch" ) {
 }
 
 TEST_CASE( "invalid dispatch operations" ) {
-  std::print("--- invalid dispatch operations ---");
-
   Engine engine;
 
   SECTION( "invalid pipeline RID" ) {
+    std::println("--- invalid pipeline RID dispatch ---");
+
     RID buffer = engine.create_storage_buffer(1024);
     REQUIRE( buffer.is_valid() );
 
@@ -82,6 +82,8 @@ TEST_CASE( "invalid dispatch operations" ) {
   }
 
   SECTION( "non-pipeline RID" ) {
+    std::println("--- non-pipeline RID dispatch ---");
+
     RID buffer = engine.create_storage_buffer(1024);
     REQUIRE( buffer.is_valid() );
 
@@ -99,6 +101,8 @@ TEST_CASE( "invalid dispatch operations" ) {
   }
 
   SECTION( "invalid set RID" ) {
+    std::println("--- invalid descriptor set RID dispatch ---");
+
     RID shader = engine.compile_shader(ShaderType::Compute, std::format("{}/shaders/shader.glsl", GROOT_TEST_DIR));
     REQUIRE( shader.is_valid() );
 
@@ -120,6 +124,8 @@ TEST_CASE( "invalid dispatch operations" ) {
   }
 
   SECTION( "non-descriptor-set RID" ) {
+    std::println("--- non-descriptor-set RID dispatch ---");
+
     RID shader = engine.compile_shader(ShaderType::Compute, std::format("{}/shaders/shader.glsl", GROOT_TEST_DIR));
     REQUIRE( shader.is_valid() );
 
