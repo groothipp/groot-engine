@@ -18,6 +18,7 @@ namespace groot {
 class Allocator;
 class VulkanContext;
 class ShaderCompiler;
+class Renderer;
 
 class alignas(64) Engine {
   Settings m_settings;
@@ -25,6 +26,7 @@ class alignas(64) Engine {
   VulkanContext * m_context = nullptr;
   Allocator * m_allocator = nullptr;
   ShaderCompiler * m_compiler = nullptr;
+  Renderer * m_renderer = nullptr;
 
   unsigned long m_nextRID = 0;
   std::unordered_map<RID, unsigned long, RID::Hash> m_resources;

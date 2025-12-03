@@ -24,8 +24,9 @@ struct Settings {
   std::string window_title = "Groot Engine Application";
   unsigned int gpu_index = 0;
   double time_step = 1.0 / 60.0;
-  Format color_format = Format::rgba8_srgb;
-  Format depth_format = Format::d32_sfloat;
+  Format color_format = Format::bgra8_srgb;
+  ColorSpace color_space = ColorSpace::srgb_nonlinear;
+  RenderMode render_mode = RenderMode::TripleBuffer;
 };
 
 struct GraphicsPipelineShaders {

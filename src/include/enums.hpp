@@ -1,5 +1,6 @@
 #pragma once
 
+
 namespace groot {
 
 enum ShaderType {
@@ -67,10 +68,6 @@ enum class Format {
   rgba32_uint         = 107,
   rgba32_sint         = 108,
   rgba32_sfloat       = 109,
-  d16_unorm           = 124,
-  d32_sfloat          = 126,
-  d24_unorm_s8_uint   = 129,
-  d32_sfloat_s8_uint  = 130,
   bc1_rgb_unorm       = 131,
   bc1_rgb_srgb        = 132,
   bc1_rgba_unorm      = 133,
@@ -121,6 +118,18 @@ enum SampleMode {
 enum Filter {
   Nearest,
   Linear
+};
+
+enum ColorSpace {
+  srgb_nonlinear        = 0,
+  display_p3_nonlinear  = 1000104001,
+  extended_srgb_linear  = 1000104002
+};
+
+enum RenderMode {
+  NoSync,
+  TripleBuffer,
+  VSync
 };
 
 } // namespace groot

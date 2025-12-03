@@ -262,4 +262,201 @@ mat3 mat3::scale(float sx, float sy, float sz) {
   );
 }
 
+mat4::mat4(float s) : m_col1(vec4(s)), m_col2(vec4(s)), m_col3(vec4(s)), m_col4(vec4(s)) {}
+
+mat4::mat4(const vec4& col1, const vec4& col2, const vec4& col3, const vec4& col4)
+: m_col1(col1), m_col2(col2), m_col3(col3), m_col4(col4) {}
+
+mat4::mat4(const mat2& m, float s)
+: m_col1(vec4(m[0], s, s)), m_col2(vec4(m[1], s, s)), m_col3(vec4(s)), m_col4(vec4(s)) {}
+
+mat4::mat4(const mat3& m, float s)
+: m_col1(vec4(m[0], s)), m_col2(vec4(m[1], s)), m_col3(vec4(m[2], s)), m_col4(vec4(s)) {}
+
+vec4& mat4::operator[](unsigned int index) {
+  switch (index) {
+    case 0: return m_col1;
+    case 1: return m_col2;
+    case 2: return m_col3;
+    case 3: return m_col4;
+    default:
+      Log::out_of_range("mat4 access out of range");
+      return m_col1;
+  }
+}
+
+const vec4& mat4::operator[](unsigned int index) const {
+  switch (index) {
+    case 0: return m_col1;
+    case 1: return m_col2;
+    case 2: return m_col3;
+    case 3: return m_col4;
+    default:
+      Log::out_of_range("mat4 access out of range");
+      return m_col1;
+  }
+}
+
+mat4 mat4::operator+(const mat4& rhs) const {
+  return mat4(
+    m_col1 + rhs.m_col1,
+    m_col2 + rhs.m_col2,
+    m_col3 + rhs.m_col3,
+    m_col4 + rhs.m_col4
+  );
+}
+
+mat4 mat4::operator-(const mat4& rhs) const {
+  return mat4(
+    m_col1 - rhs.m_col1,
+    m_col2 - rhs.m_col2,
+    m_col3 - rhs.m_col3,
+    m_col4 - rhs.m_col4
+  );
+}
+
+mat4 mat4::operator-() const {
+  return mat4(-m_col1, -m_col2, -m_col3, -m_col4);
+}
+
+mat4 mat4::operator*(const mat4& rhs) const {
+  return mat4(
+    *this * rhs.m_col1,
+    *this * rhs.m_col2,
+    *this * rhs.m_col3,
+    *this * rhs.m_col4
+  );
+}
+
+vec4 mat4::operator*(const vec4& rhs) const {
+  return rhs.x * m_col1 + rhs.y * m_col2 + rhs.z * m_col3 + rhs.w * m_col4;
+}
+
+mat4 mat4::operator*(float s) const {
+  return mat4(s * m_col1, s * m_col2, s * m_col3, s * m_col4);
+}
+
+mat4 mat4::operator/(float s) const {
+  return mat4(m_col1 / s, m_col2 / s, m_col3 / s, m_col4 / s);
+}
+
+mat4 mat4::inverse() const {
+  float det = determinant();
+  if (std::abs(det) < SINGLUAR_TOLERANCE) {
+    Log::warn("tried to take the inverse of a singular matrix");
+    return mat4();
+  }
+
+  mat4 cofactor;
+  for (unsigned int col = 0; col < 4; ++col) {
+    for (unsigned int row = 0; row < 4; ++row) {
+      mat3 minor = getMinorMatrix(row, col);
+      float sign = ((row + col) & 1) ? -1.0f : 1.0f;
+      cofactor[col][row] = sign * minor.determinant();
+    }
+  }
+
+  return cofactor.transpose() / det;
+}
+
+mat4 mat4::transpose() const {
+  return mat4(
+    vec4(m_col1.x, m_col2.x, m_col3.x, m_col4.x),
+    vec4(m_col1.y, m_col2.y, m_col3.y, m_col4.y),
+    vec4(m_col1.z, m_col2.z, m_col3.z, m_col4.z),
+    vec4(m_col1.w, m_col2.w, m_col3.w, m_col4.w)
+  );
+}
+
+float mat4::determinant() const {
+  float det = 0.0f;
+
+  for (unsigned int i = 0; i < 4; ++i) {
+    float sign = (i & 1) ? -1.0f : 1.0f;
+    det += sign * (*this)[0][i] * getMinorMatrix(i, 0).determinant();
+  }
+
+  return det;
+}
+
+float mat4::trace() const {
+  return m_col1.x + m_col2.y + m_col3.z + m_col4.w;
+}
+
+mat4 mat4::identity() {
+  return mat4(
+    vec4(1.0f, 0.0f, 0.0f, 0.0f),
+    vec4(0.0f, 1.0f, 0.0f, 0.0f),
+    vec4(0.0f, 0.0f, 1.0f, 0.0f),
+    vec4(0.0f, 0.0f, 0.0f, 1.0f)
+  );
+}
+
+mat4 mat4::translation(const vec3 & pos) {
+  return mat4(
+    vec4(1.0f, 0.0f, 0.0f, 0.0f),
+    vec4(0.0f, 1.0f, 0.0f, 0.0f),
+    vec4(0.0f, 0.0f, 1.0f, 0.0f),
+    vec4(pos, 1.0f)
+  );
+}
+
+mat4 mat4::rotation(const vec3 & axis, float angle) {
+  mat4 rot(mat3::rotation(axis, angle));
+  rot.m_col4.w = 1.0f;
+  return rot;
+}
+
+mat4 mat4::scale(float sx, float sy, float sz) {
+  mat4 s(mat3::scale(sx, sy, sz));
+  s.m_col4.w = 1.0f;
+  return s;
+}
+
+mat4 mat4::view(const vec3& eye, const vec3& target, const vec3& up) {
+  vec3 f = (target - eye).normalized();
+  vec3 r = f.cross(up).normalized();
+  vec3 u = r.cross(f).normalized();
+
+  return mat4(
+    vec4(r.x, u.x, f.x, 0.0f),
+    vec4(r.y, u.y, f.y, 0.0f),
+    vec4(r.z, u.z, f.z, 0.0f),
+    vec4(-r.dot(eye), -u.dot(eye), -f.dot(eye), 1.0f)
+  );
+}
+
+mat4 mat4::perspective_projection(float fov, float ar, float near, float far) {
+  float tanFov = std::tan(0.5 * fov);
+  float range = far - near;
+
+  return mat4(
+    vec4(1.0f / (ar * tanFov), 0.0f, 0.0f, 0.0f),
+    vec4(0.0f, -1.0f / tanFov, 0.0f, 0.0f),
+    vec4(0.0f, 0.0f, far / range, 1.0f),
+    vec4(0.0f, 0.0f, -(far * near) / range, 0.0f)
+  );
+}
+
+mat3 mat4::getMinorMatrix(unsigned int skipRow, unsigned int skipCol) const {
+  vec3 cols[3];
+  int colIndex = 0;
+
+  for (int col = 0; col < 4; ++col) {
+    if (col == skipCol) continue;
+
+    int rowIndex = 0;
+    float vals[3];
+
+    for (int row = 0; row < 4; ++row) {
+      if (row == skipRow) continue;
+      vals[rowIndex++] = (*this)[col][row];
+    }
+
+    cols[colIndex++] = vec3(vals[0], vals[1], vals[2]);
+  }
+
+  return mat3(cols[0], cols[1], cols[2]);
+}
+
 } // namespace groot

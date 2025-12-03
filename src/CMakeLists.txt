@@ -10,6 +10,7 @@ set(ENGINE_INCLUDES
   ${CMAKE_CURRENT_SOURCE_DIR}/include/enums.hpp
   ${CMAKE_CURRENT_SOURCE_DIR}/include/linalg.hpp
   ${CMAKE_CURRENT_SOURCE_DIR}/include/log.hpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/renderer.hpp
   ${CMAKE_CURRENT_SOURCE_DIR}/include/rid.hpp
   ${CMAKE_CURRENT_SOURCE_DIR}/include/shader_compiler.hpp
   ${CMAKE_CURRENT_SOURCE_DIR}/include/stb_image.h
@@ -22,6 +23,7 @@ set(ENGINE_SOURCES
   ${CMAKE_CURRENT_SOURCE_DIR}/engine.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/linalg.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/log.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/renderer.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/rid.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/shader_compiler.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/stb_image.cpp

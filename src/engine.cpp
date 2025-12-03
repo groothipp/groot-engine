@@ -2,6 +2,7 @@
 #include "src/include/engine.hpp"
 #include "src/include/enums.hpp"
 #include "src/include/log.hpp"
+#include "src/include/renderer.hpp"
 #include "src/include/shader_compiler.hpp"
 #include "src/include/stb_image.h"
 #include "src/include/structs.hpp"
@@ -40,8 +41,8 @@ Engine::Engine(const Settings& settings) : m_settings(settings) {
   m_context->printInfo();
 
   m_allocator = new Allocator(m_context, m_context->gpu().getProperties().apiVersion);
-
   m_compiler = new ShaderCompiler();
+  m_renderer = new Renderer(m_window, m_context, m_settings);
 }
 
 Engine::~Engine() {
@@ -91,6 +92,9 @@ Engine::~Engine() {
       }
     }
   }
+
+  m_renderer->destroy(m_context->device());
+  delete m_renderer;
 
   delete m_allocator;
   delete m_context;
@@ -1022,7 +1026,7 @@ RID Engine::create_graphics_pipeline(const GraphicsPipelineShaders& shaders, con
   vk::PipelineRenderingCreateInfo renderingCreateInfo{
     .colorAttachmentCount     = 1,
     .pColorAttachmentFormats  = reinterpret_cast<vk::Format *>(&m_settings.color_format),
-    .depthAttachmentFormat    = static_cast<vk::Format>(m_settings.depth_format)
+    .depthAttachmentFormat    = m_renderer->depthFormat()
   };
 
   vk::GraphicsPipelineCreateInfo pipelineCreateInfo{

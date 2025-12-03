@@ -238,7 +238,7 @@ class mat3 {
     mat3() = default;
     explicit mat3(float);
     mat3(const vec3&, const vec3&, const vec3&);
-    mat3(const mat2&, float s = 0);
+    explicit mat3(const mat2&, float s = 0);
     mat3(const mat3&) = default;
     mat3(mat3&&) = default;
 
@@ -275,7 +275,49 @@ class mat3 {
 };
 
 class mat4 {
+  vec4 m_col1, m_col2, m_col3, m_col4;
 
+  public:
+    mat4() = default;
+    explicit mat4(float);
+    mat4(const vec4&, const vec4&, const vec4&, const vec4&);
+    explicit mat4(const mat2&, float s = 0.0f);
+    explicit mat4(const mat3&, float s = 0.0f);
+    mat4(const mat4&) = default;
+    mat4(mat4&&) = default;
+
+    ~mat4() = default;
+
+    mat4& operator=(const mat4&) = default;
+    mat4& operator=(mat4&&) = default;
+
+    vec4& operator[](unsigned int);
+    const vec4& operator[](unsigned int) const;
+
+    std::partial_ordering operator<=>(const mat4&) const = default;
+
+    mat4 operator+(const mat4&) const;
+    mat4 operator-(const mat4&) const;
+    mat4 operator-() const;
+    mat4 operator*(const mat4&) const;
+    vec4 operator*(const vec4&) const;
+    mat4 operator*(float) const;
+    mat4 operator/(float) const;
+
+    mat4 inverse() const;
+    mat4 transpose() const;
+    float determinant() const;
+    float trace() const;
+
+    static mat4 identity();
+    static mat4 translation(const vec3&);
+    static mat4 rotation(const vec3&, float);
+    static mat4 scale(float, float, float);
+    static mat4 view(const vec3&, const vec3&, const vec3&);
+    static mat4 perspective_projection(float, float, float, float);
+
+  private:
+    mat3 getMinorMatrix(unsigned int, unsigned int) const;
 };
 
 } // namespace groot
@@ -321,5 +363,9 @@ inline groot::mat2 operator*(float lhs, const groot::mat2& rhs) {
 }
 
 inline groot::mat3 operator*(float lhs, const groot::mat3& rhs) {
+  return rhs * lhs;
+}
+
+inline groot::mat4 operator*(float lhs, const groot::mat4& rhs) {
   return rhs * lhs;
 }
