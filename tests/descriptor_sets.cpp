@@ -2,13 +2,15 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <iostream>
+
 using namespace groot;
 
 TEST_CASE( "descriptor set creation" ) {
   Engine engine;
 
   SECTION( "uniform buffer" ) {
-    std::println("--- uniform buffer descriptor set --- ");
+    std::println(std::cout, "--- uniform buffer descriptor set --- ");
 
     RID buffer = engine.create_uniform_buffer(1024);
     REQUIRE( buffer.is_valid() );
@@ -19,7 +21,7 @@ TEST_CASE( "descriptor set creation" ) {
   }
 
   SECTION( "storage buffer" ) {
-    std::println("--- storage buffer descriptor set --- ");
+    std::println(std::cout, "--- storage buffer descriptor set --- ");
 
     RID buffer = engine.create_storage_buffer(1024);
     REQUIRE( buffer.is_valid() );
@@ -30,7 +32,7 @@ TEST_CASE( "descriptor set creation" ) {
   }
 
   SECTION( "storage image" ) {
-    std::println("--- storage image descriptor set --- ");
+    std::println(std::cout, "--- storage image descriptor set --- ");
 
     RID image = engine.create_storage_image(1024, 1024);
     REQUIRE( image.is_valid() );
@@ -41,12 +43,12 @@ TEST_CASE( "descriptor set creation" ) {
   }
 
   SECTION( "texture" ) {
-    std::println("--- texture descriptor set --- ");
+    std::println(std::cout, "--- texture descriptor set --- ");
 
     RID sampler = engine.create_sampler({});
     REQUIRE( sampler.is_valid() );
 
-    RID texture = engine.create_texture(std::format("{}/img/test.png", GROOT_TEST_DIR), sampler);
+    RID texture = engine.create_texture(std::format("{}/dat/test.png", GROOT_TEST_DIR), sampler);
     REQUIRE( sampler.is_valid() );
 
     RID set = engine.create_descriptor_set({ texture });
@@ -55,7 +57,7 @@ TEST_CASE( "descriptor set creation" ) {
   }
 
   SECTION( "storage texture" ) {
-    std::println("--- storage texture descriptor set --- ");
+    std::println(std::cout, "--- storage texture descriptor set --- ");
 
     RID sampler = engine.create_sampler({});
     REQUIRE( sampler.is_valid() );
@@ -69,7 +71,7 @@ TEST_CASE( "descriptor set creation" ) {
   }
 
   SECTION( "all descriptor types" ) {
-    std::println("--- complete descriptor set --- ");
+    std::println(std::cout, "--- complete descriptor set --- ");
 
     RID uniformBuffer = engine.create_uniform_buffer(1024);
     RID storageBuffer = engine.create_storage_buffer(1024);
@@ -81,7 +83,7 @@ TEST_CASE( "descriptor set creation" ) {
     REQUIRE( image.is_valid() );
     REQUIRE( sampler.is_valid() );
 
-    RID texture = engine.create_texture(std::format("{}/img/test.png", GROOT_TEST_DIR), sampler);
+    RID texture = engine.create_texture(std::format("{}/dat/test.png", GROOT_TEST_DIR), sampler);
     RID storageTexture = engine.create_storage_texture(1024, 1024, sampler);
 
     REQUIRE( texture.is_valid() );
@@ -93,14 +95,14 @@ TEST_CASE( "descriptor set creation" ) {
   }
 
   SECTION( "empty descriptor array" ) {
-    std::println("--- empty descriptor array ---");
+    std::println(std::cout, "--- empty descriptor array ---");
     RID set = engine.create_descriptor_set({});
     CHECK( set.is_valid() );
   }
 }
 
 TEST_CASE( "descriptor set destruction" ) {
-  std::println("--- descriptor set destruction --- ");
+  std::println(std::cout, "--- descriptor set destruction --- ");
 
   Engine engine;
 
@@ -119,7 +121,7 @@ TEST_CASE( "invalid descriptor set operations" ) {
   Engine engine;
 
   SECTION( "destroy invalid RID" ) {
-    std::println("--- destroy invalid descriptor set RID ---");
+    std::println(std::cout, "--- destroy invalid descriptor set RID ---");
 
     RID rid;
     engine.destroy_descriptor_set(rid);
@@ -127,7 +129,7 @@ TEST_CASE( "invalid descriptor set operations" ) {
   }
 
   SECTION( "destroy non-descriptor-set RID" ) {
-    std::println("--- destroy non-descriptor-set RID ---");
+    std::println(std::cout, "--- destroy non-descriptor-set RID ---");
 
     RID buffer = engine.create_uniform_buffer(1024);
     REQUIRE( buffer.is_valid() );
@@ -137,11 +139,11 @@ TEST_CASE( "invalid descriptor set operations" ) {
   }
 
   SECTION( "invalid descriptor type" ) {
-    std::println("--- invalid descriptor type ---");
+    std::println(std::cout, "--- invalid descriptor type ---");
 
     RID sampler = engine.create_sampler({});
     RID goodSet = engine.create_descriptor_set({});
-    RID shader = engine.compile_shader(ShaderType::Compute, std::format("{}/shaders/shader.glsl", GROOT_TEST_DIR));
+    RID shader = engine.compile_shader(ShaderType::Compute, std::format("{}/dat/shader.glsl", GROOT_TEST_DIR));
     REQUIRE( goodSet.is_valid() );
     REQUIRE( shader.is_valid() );
 

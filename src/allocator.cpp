@@ -1,17 +1,8 @@
 #include "src/include/allocator.hpp"
 #include "src/include/log.hpp"
-#include "src/include/structs.hpp"
 #include "src/include/vulkan_context.hpp"
 
 namespace groot {
-
-std::size_t VkBufferHash::operator()(VkBuffer buffer) const {
-  return std::hash<unsigned long>{}(reinterpret_cast<unsigned long>(buffer));
-}
-
-std::size_t VkImageHash::operator()(VkImage image) const {
-  return std::hash<unsigned long>{}(reinterpret_cast<unsigned long>(image));
-}
 
 Allocator::Allocator(const VulkanContext * context, unsigned int apiVersion) {
   VmaAllocatorCreateInfo createInfo{

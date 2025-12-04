@@ -409,22 +409,7 @@ struct GraphicsPipelineShaders {
   RID tesselation_evaluation = RID();
 };
 
-struct VertexBinding {
-  unsigned int binding = 0;
-  unsigned int stride = 0;
-  InputRate input_rate = InputRate::VertexRate;
-};
-
-struct VertexAttribute {
-  unsigned int location = 0;
-  unsigned int binding = 0;
-  Format format = Format::undefined;
-  unsigned int offset = 0;
-};
-
 struct GraphicsPipelineSettings {
-  std::vector<VertexBinding> vertex_bindings = {};
-  std::vector<VertexAttribute> vertex_attributes = {};
   MeshType mesh_type = MeshType::Solid;
   CullMode cull_mode = CullMode::Back;
   DrawDirection draw_direction = DrawDirection::CounterClockwise;
@@ -532,6 +517,9 @@ class alignas(64) Engine {
     RID create_compute_pipeline(const RID&, const RID&);
     RID create_graphics_pipeline(const GraphicsPipelineShaders&, const RID&, const GraphicsPipelineSettings&);
     void destroy_pipeline(RID&);
+
+    RID load_mesh(const std::string&);
+    void destroy_mesh(RID&);
 
     void compute_command(const ComputeCommand&);
     void dispatch();

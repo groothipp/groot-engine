@@ -3,7 +3,7 @@
 
 namespace groot {
 
-enum ShaderType {
+enum class ShaderType {
   Vertex,
   Fragment,
   TesselationControl,
@@ -16,6 +16,7 @@ enum ResourceType {
   Shader,
   Pipeline,
   DescriptorSet,
+  Mesh,
   UniformBuffer,
   StorageBuffer,
   Sampler,

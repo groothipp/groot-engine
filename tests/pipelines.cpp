@@ -2,12 +2,14 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <iostream>
+
 using namespace groot;
 
 TEST_CASE( "pipeline creation" ) {
   Engine engine;
 
-  std::string shaderPath = std::format("{}/shaders/shader.glsl", GROOT_TEST_DIR);
+  std::string shaderPath = std::format("{}/dat/shader.glsl", GROOT_TEST_DIR);
 
   RID buffer = engine.create_uniform_buffer(1024);
   RID set = engine.create_descriptor_set({ buffer });
@@ -16,7 +18,7 @@ TEST_CASE( "pipeline creation" ) {
   REQUIRE( set.is_valid() );
 
   SECTION( "compute pipeline" ) {
-    std::println("--- create compute pipeline ---");
+    std::println(std::cout, "--- create compute pipeline ---");
 
     RID shader = engine.compile_shader(ShaderType::Compute, shaderPath);
     REQUIRE( shader.is_valid() );
@@ -26,7 +28,7 @@ TEST_CASE( "pipeline creation" ) {
   }
 
   SECTION( "graphics pipeline" ) {
-    std::println("--- create graphics pipeline ---");
+    std::println(std::cout, "--- create graphics pipeline ---");
 
     RID vertexShader = engine.compile_shader(ShaderType::Vertex, shaderPath);
     RID fragmentShader = engine.compile_shader(ShaderType::Fragment, shaderPath);
@@ -44,13 +46,13 @@ TEST_CASE( "pipeline creation" ) {
 }
 
 TEST_CASE( "pipeline destruction" ) {
-  std::println("--- pipeline destruction ---");
+  std::println(std::cout, "--- pipeline destruction ---");
 
   Engine engine;
 
   RID buffer = engine.create_uniform_buffer(1024);
   RID set = engine.create_descriptor_set({ buffer });
-  RID shader = engine.compile_shader(ShaderType::Compute, std::format("{}/shaders/shader.glsl", GROOT_TEST_DIR));
+  RID shader = engine.compile_shader(ShaderType::Compute, std::format("{}/dat/shader.glsl", GROOT_TEST_DIR));
   RID pipeline = engine.create_compute_pipeline(shader, set);
 
   REQUIRE( buffer.is_valid() );
@@ -66,7 +68,7 @@ TEST_CASE( "pipeline destruction" ) {
 TEST_CASE( "invalid pipeline operations" ) {
   Engine engine;
 
-  std::string shaderPath = std::format("{}/shaders/shader.glsl", GROOT_TEST_DIR);
+  std::string shaderPath = std::format("{}/dat/shader.glsl", GROOT_TEST_DIR);
   RID vertex = engine.compile_shader(ShaderType::Vertex, shaderPath);
   RID fragment = engine.compile_shader(ShaderType::Fragment, shaderPath);
   RID compute = engine.compile_shader(ShaderType::Compute, shaderPath);
@@ -80,7 +82,7 @@ TEST_CASE( "invalid pipeline operations" ) {
   REQUIRE( set.is_valid() );
 
   SECTION( "invalid shader RID" ) {
-    std::println("--- create pipeline with invalid RID ---");
+    std::println(std::cout, "--- create pipeline with invalid RID ---");
 
     RID rid;
 
@@ -101,7 +103,7 @@ TEST_CASE( "invalid pipeline operations" ) {
   }
 
   SECTION( "non-shader RID") {
-    std::println("--- create pipeline with non-shader RID ---");
+    std::println(std::cout, "--- create pipeline with non-shader RID ---");
 
     RID computePipeline = engine.create_compute_pipeline(buffer, set);
     CHECK_FALSE( computePipeline.is_valid() );
@@ -120,7 +122,7 @@ TEST_CASE( "invalid pipeline operations" ) {
   }
 
   SECTION( "invalid descriptor set RID" ) {
-    std::println("--- create pipeline with invalid descriptor set RID ---");
+    std::println(std::cout, "--- create pipeline with invalid descriptor set RID ---");
 
     RID rid;
 
@@ -135,7 +137,7 @@ TEST_CASE( "invalid pipeline operations" ) {
   }
 
   SECTION( "non-descriptor-set RID") {
-    std::println("--- create pipeline with non-descriptor-set RID ---\n");
+    std::println(std::cout, "--- create pipeline with non-descriptor-set RID ---\n");
 
     RID computePipeline = engine.create_compute_pipeline(compute, buffer);
     CHECK_FALSE( computePipeline.is_valid() );
@@ -148,7 +150,7 @@ TEST_CASE( "invalid pipeline operations" ) {
   }
 
   SECTION( "destroy invalid RID" ) {
-    std::println("--- destroy invalid pipeline RID ---");
+    std::println(std::cout, "--- destroy invalid pipeline RID ---");
 
     RID rid;
     engine.destroy_pipeline(rid);
@@ -156,7 +158,7 @@ TEST_CASE( "invalid pipeline operations" ) {
   }
 
   SECTION( "destroy non-pipeline RID" ) {
-    std::println("--- destroy non-pipeline RID ---\n");
+    std::println(std::cout, "--- destroy non-pipeline RID ---\n");
 
     engine.destroy_pipeline(buffer);
     CHECK( buffer.is_valid() );

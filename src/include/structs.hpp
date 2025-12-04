@@ -1,9 +1,10 @@
 #pragma once
 
 #include "src/include/enums.hpp"
+#include "src/include/linalg.hpp"
 #include "src/include/rid.hpp"
 
-#include <vulkan/vulkan_raii.hpp>
+#include <vulkan/vulkan.hpp>
 
 #include <cstdint>
 
@@ -36,22 +37,7 @@ struct GraphicsPipelineShaders {
   RID tesselation_evaluation = RID();
 };
 
-struct VertexBinding {
-  unsigned int binding = 0;
-  unsigned int stride = 0;
-  InputRate input_rate = InputRate::VertexRate;
-};
-
-struct VertexAttribute {
-  unsigned int location = 0;
-  unsigned int binding = 0;
-  Format format = Format::undefined;
-  unsigned int offset = 0;
-};
-
 struct GraphicsPipelineSettings {
-  std::vector<VertexBinding> vertex_bindings = {};
-  std::vector<VertexAttribute> vertex_attributes = {};
   MeshType mesh_type = MeshType::Solid;
   CullMode cull_mode = CullMode::Back;
   DrawDirection draw_direction = DrawDirection::CounterClockwise;
@@ -90,6 +76,27 @@ struct ComputeCommand {
   std::vector<uint8_t> push_constants;
   bool barrier = false;
   std::tuple<unsigned int, unsigned int, unsigned int> work_groups = { 1, 1, 1 };
+};
+
+struct Vertex {
+  vec3 position;
+  vec2 uv;
+  vec3 normal;
+
+  struct Hash {
+    std::size_t operator()(const Vertex&) const;
+  };
+
+  bool operator==(const Vertex&) const;
+
+  static vk::VertexInputBindingDescription binding();
+  static std::array<vk::VertexInputAttributeDescription, 3> attributes();
+};
+
+struct MeshHandle {
+  vk::Buffer vertexBuffer = nullptr;
+  vk::Buffer indexBuffer  = nullptr;
+  unsigned int indexCount = 0;
 };
 
 } // namespace groot

@@ -2,26 +2,28 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <iostream>
+
 using namespace groot;
 
 TEST_CASE( "buffer creation" ) {
   Engine engine;
 
   SECTION( "uniform buffer" ) {
-    std::println("--- create uniform buffer ---");
+    std::println(std::cout, "--- create uniform buffer ---");
     RID buffer = engine.create_uniform_buffer(1024);
     CHECK( buffer.is_valid() );
   }
 
   SECTION( "storage buffer" ) {
-    std::println("--- create storage buffer ---");
+    std::println(std::cout, "--- create storage buffer ---");
     RID buffer = engine.create_storage_buffer(1024);
     CHECK( buffer.is_valid() );
   }
 }
 
 TEST_CASE( "buffer destruction" ) {
-  std::println("--- buffer destruction ---");
+  std::println(std::cout, "--- buffer destruction ---");
 
   Engine engine;
 
@@ -37,7 +39,7 @@ TEST_CASE( "buffer read and write" ) {
   Engine engine;
 
   SECTION( "read/write vector" ) {
-    std::println("--- read/write vector ---");
+    std::println(std::cout, "--- read/write vector ---");
 
     std::vector<int> data(256);
     RID buffer = engine.create_uniform_buffer(sizeof(int) * data.size());
@@ -50,7 +52,7 @@ TEST_CASE( "buffer read and write" ) {
   }
 
   SECTION( "read/write value" ) {
-    std::println("--- read/write value ---");
+    std::println(std::cout, "--- read/write value ---");
 
     int val = 4;
     RID buffer = engine.create_uniform_buffer(sizeof(int));
@@ -67,7 +69,7 @@ TEST_CASE( "invalid buffer operations" ) {
   Engine engine;
 
   SECTION( "invalid RID" ) {
-    std::println("--- destroy invalid buffer RID ---");
+    std::println(std::cout, "--- destroy invalid buffer RID ---");
 
     RID rid;
     engine.destroy_buffer(rid);
@@ -75,7 +77,7 @@ TEST_CASE( "invalid buffer operations" ) {
   }
 
   SECTION( "size 0 creation" ) {
-    std::println("--- size 0 buffer creation ---");
+    std::println(std::cout, "--- size 0 buffer creation ---");
 
     RID uniform = engine.create_uniform_buffer(0);
     CHECK_FALSE( uniform.is_valid() );
@@ -85,7 +87,7 @@ TEST_CASE( "invalid buffer operations" ) {
   }
 
   SECTION( "destroy non-buffer RID" ) {
-    std::println("--- destroy non-buffer RID ---");
+    std::println(std::cout, "--- destroy non-buffer RID ---");
 
     RID image = engine.create_storage_image(1024, 1024, Format::rgba8_unorm);
     REQUIRE( image.is_valid() );
@@ -95,7 +97,7 @@ TEST_CASE( "invalid buffer operations" ) {
   }
 
   SECTION( "read invalid buffer RID" ) {
-    std::println("--- read invalid buffer RID ---");
+    std::println(std::cout, "--- read invalid buffer RID ---");
 
     RID rid;
 
@@ -107,7 +109,7 @@ TEST_CASE( "invalid buffer operations" ) {
   }
 
   SECTION( "read non-buffer RID" ) {
-    std::println("--- read non-buffer RID ---");
+    std::println(std::cout, "--- read non-buffer RID ---");
 
     RID image = engine.create_storage_image(1024, 1024, Format::rgba8_unorm);
     REQUIRE( image.is_valid() );
@@ -120,7 +122,7 @@ TEST_CASE( "invalid buffer operations" ) {
   }
 
   SECTION( "write invalid buffer RID" ) {
-    std::println("--- buffer write invalid buffer RID ---");
+    std::println(std::cout, "--- buffer write invalid buffer RID ---");
 
     RID rid;
 
@@ -134,7 +136,7 @@ TEST_CASE( "invalid buffer operations" ) {
   }
 
   SECTION( "write non-buffer RID" ) {
-    std::println("--- write non-buffer RID ---");
+    std::println(std::cout, "--- write non-buffer RID ---");
 
     RID image = engine.create_storage_image(1024, 1024, Format::rgba8_unorm);
     REQUIRE( image.is_valid() );
@@ -149,7 +151,7 @@ TEST_CASE( "invalid buffer operations" ) {
   }
 
   SECTION( "write empty vector" ) {
-    std::println("--- buffer write empty vector ---");
+    std::println(std::cout, "--- buffer write empty vector ---");
 
     RID buffer = engine.create_uniform_buffer(1024);
     REQUIRE( buffer.is_valid() );

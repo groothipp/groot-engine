@@ -2,8 +2,8 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <iostream>
 #include <numbers>
-#include <print>
 
 #define TOLERANCE 1e-6
 
@@ -11,7 +11,7 @@ using namespace groot;
 
 TEST_CASE( "operator[] access" ) {
   SECTION( "vec2" ) {
-    std::println("--- vec2 access ---");
+    std::println(std::cout, "--- vec2 access ---");
 
     vec2 u(1.0f);
 
@@ -33,7 +33,7 @@ TEST_CASE( "operator[] access" ) {
   }
 
   SECTION( "vec3" ) {
-    std::println("--- vec3 access ---");
+    std::println(std::cout, "--- vec3 access ---");
 
     vec3 u(1.0f);
 
@@ -57,7 +57,7 @@ TEST_CASE( "operator[] access" ) {
   }
 
   SECTION( "vec4" ) {
-    std::println("--- vec4 access ---");
+    std::println(std::cout, "--- vec4 access ---");
 
     vec4 u(1.0f);
 
@@ -79,7 +79,7 @@ TEST_CASE( "operator[] access" ) {
   }
 
   SECTION( "mat2" ) {
-    std::println("--- mat2 access ---");
+    std::println(std::cout, "--- mat2 access ---");
 
     mat2 m = mat2::identity();
 
@@ -98,7 +98,7 @@ TEST_CASE( "operator[] access" ) {
   }
 
   SECTION( "mat3" ) {
-    std::println("--- mat3 access ---");
+    std::println(std::cout, "--- mat3 access ---");
 
     mat3 m = mat3::identity();
 
@@ -118,7 +118,7 @@ TEST_CASE( "operator[] access" ) {
   }
 
   SECTION( "mat4" ) {
-    std::println("--- mat4 access ---");
+    std::println(std::cout, "--- mat4 access ---");
 
     mat4 m = mat4::identity();
 
@@ -141,7 +141,7 @@ TEST_CASE( "operator[] access" ) {
 
 TEST_CASE( "comparison" ) {
   SECTION( "vec2") {
-    std::println("--- vec2 comparisons ---");
+    std::println(std::cout, "--- vec2 comparisons ---");
 
     vec2 u(1.0f);
     vec2 v(1.0f);
@@ -152,7 +152,7 @@ TEST_CASE( "comparison" ) {
   }
 
   SECTION( "vec3" ) {
-    std::println("--- vec3 comparison ---");
+    std::println(std::cout, "--- vec3 comparison ---");
 
     vec3 u(1.0f);
     vec3 v(1.0f);
@@ -163,7 +163,7 @@ TEST_CASE( "comparison" ) {
   }
 
   SECTION( "vec4" ) {
-    std::println("--- vec4 comparison ---");
+    std::println(std::cout, "--- vec4 comparison ---");
 
     vec4 u(1.0f);
     vec4 v(1.0f);
@@ -174,7 +174,7 @@ TEST_CASE( "comparison" ) {
   }
 
   SECTION( "mat2" ) {
-    std::println("--- mat2 comparison ---");
+    std::println(std::cout, "--- mat2 comparison ---");
 
     mat2 a = mat2::identity();
     mat2 b = mat2::identity();
@@ -185,7 +185,7 @@ TEST_CASE( "comparison" ) {
   }
 
   SECTION( "mat3" ) {
-    std::println("--- mat3 comparison ---");
+    std::println(std::cout, "--- mat3 comparison ---");
 
     mat3 a = mat3::identity();
     mat3 b = mat3::identity();
@@ -196,7 +196,7 @@ TEST_CASE( "comparison" ) {
   }
 
   SECTION( "mat4" ) {
-    std::println("--- mat4 comparison ---");
+    std::println(std::cout, "--- mat4 comparison ---");
 
     mat4 a = mat4::identity();
     mat4 b = mat4::identity();
@@ -209,7 +209,7 @@ TEST_CASE( "comparison" ) {
 
 TEST_CASE( "type casting" ) {
   SECTION( "vec2" ) {
-    std::println("--- vec2 type casting ---");
+    std::println(std::cout, "--- vec2 type casting ---");
 
     vec2 u(1.0f);
     ivec2 v(1);
@@ -224,7 +224,7 @@ TEST_CASE( "type casting" ) {
   }
 
   SECTION( "vec3" ) {
-    std::println("--- vec3 type casting ---");
+    std::println(std::cout, "--- vec3 type casting ---");
 
     vec3 u(1.0f);
     ivec3 v(1);
@@ -239,7 +239,7 @@ TEST_CASE( "type casting" ) {
   }
 
   SECTION( "vec4" ) {
-    std::println("--- vec4 type casting ---");
+    std::println(std::cout, "--- vec4 type casting ---");
 
     vec4 u(1.0f);
     ivec4 v(1);
@@ -256,7 +256,7 @@ TEST_CASE( "type casting" ) {
 
 TEST_CASE( "addition" ) {
   SECTION( "vec2" ) {
-    std::println("--- vec2 addition ---");
+    std::println(std::cout, "--- vec2 addition ---");
 
     vec2 u(1.0f);
     vec2 v(2.0f);
@@ -266,7 +266,7 @@ TEST_CASE( "addition" ) {
   }
 
   SECTION( "vec3" ) {
-    std::println("--- vec3 addition ---");
+    std::println(std::cout, "--- vec3 addition ---");
 
     vec3 u(1.0f);
     vec3 v(2.0f);
@@ -276,7 +276,7 @@ TEST_CASE( "addition" ) {
   }
 
   SECTION( "vec4" ) {
-    std::println("--- vec4 addition ---");
+    std::println(std::cout, "--- vec4 addition ---");
 
     vec4 u(1.0f);
     vec4 v(2.0f);
@@ -286,7 +286,7 @@ TEST_CASE( "addition" ) {
   }
 
   SECTION( "mat2" ) {
-    std::println("--- mat2 addition ---");
+    std::println(std::cout, "--- mat2 addition ---");
 
     mat2 a(1.0f);
     mat2 b(1.0f);
@@ -296,7 +296,7 @@ TEST_CASE( "addition" ) {
   }
 
   SECTION( "mat3" ) {
-    std::println("--- mat3 addition ---");
+    std::println(std::cout, "--- mat3 addition ---");
 
     mat3 a(1.0f);
     mat3 b(1.0f);
@@ -306,7 +306,7 @@ TEST_CASE( "addition" ) {
   }
 
   SECTION( "mat4" ) {
-    std::println("--- mat4 addition ---");
+    std::println(std::cout, "--- mat4 addition ---");
 
     mat4 a(1.0f);
     mat4 b(1.0f);
@@ -318,7 +318,7 @@ TEST_CASE( "addition" ) {
 
 TEST_CASE( "subtraction" ) {
   SECTION( "vec2" ) {
-    std::println("--- vec2 subtraction ---");
+    std::println(std::cout, "--- vec2 subtraction ---");
 
     vec2 u(3.0f);
     vec2 v(2.0f);
@@ -329,7 +329,7 @@ TEST_CASE( "subtraction" ) {
   }
 
   SECTION( "vec3" ) {
-    std::println("--- vec3 subtraction ---");
+    std::println(std::cout, "--- vec3 subtraction ---");
 
     vec3 u(3.0f);
     vec3 v(2.0f);
@@ -340,7 +340,7 @@ TEST_CASE( "subtraction" ) {
   }
 
   SECTION( "vec4" ) {
-    std::println("--- vec4 subtraction ---");
+    std::println(std::cout, "--- vec4 subtraction ---");
 
     vec4 u(3.0f);
     vec4 v(2.0f);
@@ -351,7 +351,7 @@ TEST_CASE( "subtraction" ) {
   }
 
   SECTION( "mat2" ) {
-    std::println("--- mat2 subtraction ---");
+    std::println(std::cout, "--- mat2 subtraction ---");
 
     mat2 a(2.0f);
     mat2 b(1.0f);
@@ -360,7 +360,7 @@ TEST_CASE( "subtraction" ) {
   }
 
   SECTION( "mat3" ) {
-    std::println("--- mat3 subtraction ---");
+    std::println(std::cout, "--- mat3 subtraction ---");
 
     mat3 a(2.0f);
     mat3 b(1.0f);
@@ -369,7 +369,7 @@ TEST_CASE( "subtraction" ) {
   }
 
   SECTION( "mat4" ) {
-    std::println("--- mat4 subtraction ---");
+    std::println(std::cout, "--- mat4 subtraction ---");
 
     mat4 a(2.0f);
     mat4 b(1.0f);
@@ -380,7 +380,7 @@ TEST_CASE( "subtraction" ) {
 
 TEST_CASE( "negation" ) {
   SECTION( "vec2") {
-    std::println("--- vec2 negation ---");
+    std::println(std::cout, "--- vec2 negation ---");
 
     vec2 u(1.0f);
     vec2 v(-1.0f);
@@ -390,7 +390,7 @@ TEST_CASE( "negation" ) {
   }
 
   SECTION( "vec3" ) {
-    std::println("--- vec3 negation ---");
+    std::println(std::cout, "--- vec3 negation ---");
 
     vec3 u(1.0f);
     vec3 v(-1.0f);
@@ -400,7 +400,7 @@ TEST_CASE( "negation" ) {
   }
 
   SECTION( "vec4" ) {
-    std::println("--- vec4 negation ---");
+    std::println(std::cout, "--- vec4 negation ---");
 
     vec4 u(1.0f);
     vec4 v(-1.0f);
@@ -410,7 +410,7 @@ TEST_CASE( "negation" ) {
   }
 
   SECTION( "mat2" ) {
-    std::println("--- mat2 negation ---");
+    std::println(std::cout, "--- mat2 negation ---");
 
     mat2 a(1.0f);
     mat2 b(-1.0f);
@@ -420,7 +420,7 @@ TEST_CASE( "negation" ) {
   }
 
   SECTION( "mat3" ) {
-    std::println("--- mat3 negation ---");
+    std::println(std::cout, "--- mat3 negation ---");
 
     mat3 a(1.0f);
     mat3 b(-1.0f);
@@ -430,7 +430,7 @@ TEST_CASE( "negation" ) {
   }
 
   SECTION( "mat4" ) {
-    std::println("--- mat4 negation ---");
+    std::println(std::cout, "--- mat4 negation ---");
 
     mat4 a(1.0f);
     mat4 b(-1.0f);
@@ -442,7 +442,7 @@ TEST_CASE( "negation" ) {
 
 TEST_CASE( "multiplication" ) {
   SECTION( "vec2 scalar mult" ) {
-    std::println("--- vec2 scalar multiplication ---");
+    std::println(std::cout, "--- vec2 scalar multiplication ---");
 
     float s = 1.0f;
     vec2 u(2.0f);
@@ -452,7 +452,7 @@ TEST_CASE( "multiplication" ) {
   }
 
   SECTION ("vec2 vector mult") {
-    std::println("--- vec2 vector multiplication ---");
+    std::println(std::cout, "--- vec2 vector multiplication ---");
 
     vec2 u(1.0f);
     vec2 v(2.0f);
@@ -461,7 +461,7 @@ TEST_CASE( "multiplication" ) {
   }
 
   SECTION( "vec3 scalar mult" ) {
-    std::println("--- vec3 scalar multiplication ---");
+    std::println(std::cout, "--- vec3 scalar multiplication ---");
 
     float s = 1.0f;
     vec3 u(2.0f);
@@ -471,7 +471,7 @@ TEST_CASE( "multiplication" ) {
   }
 
   SECTION( "vec3 vector mult" ) {
-    std::println("--- vec3 vector multiplication ---");
+    std::println(std::cout, "--- vec3 vector multiplication ---");
 
     vec3 u(1.0f);
     vec3 v(2.0f);
@@ -480,7 +480,7 @@ TEST_CASE( "multiplication" ) {
   }
 
   SECTION( "vec4 scalar mult" ) {
-    std::println("--- vec4 scalar multiplication ---");
+    std::println(std::cout, "--- vec4 scalar multiplication ---");
 
     float s = 1.0f;
     vec4 u(2.0f);
@@ -490,7 +490,7 @@ TEST_CASE( "multiplication" ) {
   }
 
   SECTION( "vec4 vector mult" ) {
-    std::println("--- vec4 vector multiplication ---");
+    std::println(std::cout, "--- vec4 vector multiplication ---");
 
     vec4 u(1.0f);
     vec4 v(2.0f);
@@ -499,7 +499,7 @@ TEST_CASE( "multiplication" ) {
   }
 
   SECTION( "mat2 mat mult" ) {
-    std::println("--- mat2 matrix multiplication ---");
+    std::println(std::cout, "--- mat2 matrix multiplication ---");
 
     mat2 a(2.0f);
     mat2 b = mat2::identity();
@@ -509,7 +509,7 @@ TEST_CASE( "multiplication" ) {
   }
 
   SECTION( "mat2 vec mult" ) {
-    std::println("--- mat2 vector multiplication ---");
+    std::println(std::cout, "--- mat2 vector multiplication ---");
 
     mat2 m = 2.0f * mat2::identity();
     vec2 u(1.0f);
@@ -519,7 +519,7 @@ TEST_CASE( "multiplication" ) {
   }
 
   SECTION( "mat2 scalar mult" ) {
-    std::println("--- mat2 scalar multiplication ---");
+    std::println(std::cout, "--- mat2 scalar multiplication ---");
 
     mat2 a = 2.0f * mat2::identity();
     mat2 b = mat2(vec2(2.0f, 0.0f), vec2(0.0f, 2.0f));
@@ -528,7 +528,7 @@ TEST_CASE( "multiplication" ) {
   }
 
   SECTION( "mat3 mat mult" ) {
-    std::println("--- mat3 matrix multiplication ---");
+    std::println(std::cout, "--- mat3 matrix multiplication ---");
 
     mat3 a(2.0f);
     mat3 b = mat3::identity();
@@ -538,7 +538,7 @@ TEST_CASE( "multiplication" ) {
   }
 
   SECTION( "mat3 vec mult" ) {
-    std::println("--- mat3 vector multiplication ---");
+    std::println(std::cout, "--- mat3 vector multiplication ---");
 
     mat3 m = 2.0f * mat3::identity();
     vec3 u = vec3(1.0f);
@@ -548,7 +548,7 @@ TEST_CASE( "multiplication" ) {
   }
 
   SECTION( "mat3 scalar mult" ) {
-    std::println("--- mat3 scalar mult ---");
+    std::println(std::cout, "--- mat3 scalar mult ---");
 
     mat3 m(2.0f);
 
@@ -556,7 +556,7 @@ TEST_CASE( "multiplication" ) {
   }
 
   SECTION( "mat4 mat mult" ) {
-    std::println("--- mat4 matrix multiplication ---");
+    std::println(std::cout, "--- mat4 matrix multiplication ---");
 
     mat4 a(2.0f);
     mat4 b = mat4::identity();
@@ -566,7 +566,7 @@ TEST_CASE( "multiplication" ) {
   }
 
   SECTION( "mat4 vec mult" ) {
-    std::println("--- mat4 vector multiplication ---");
+    std::println(std::cout, "--- mat4 vector multiplication ---");
 
     mat4 m = 2.0f * mat4::identity();
     vec4 u(1.0f);
@@ -576,7 +576,7 @@ TEST_CASE( "multiplication" ) {
   }
 
   SECTION( "mat4 scalar mult" ) {
-    std::println("--- mat4 scalar mult ---");
+    std::println(std::cout, "--- mat4 scalar mult ---");
 
     mat4 m(2.0f);
 
@@ -586,7 +586,7 @@ TEST_CASE( "multiplication" ) {
 
 TEST_CASE( "division" ) {
   SECTION( "vec2 scalar div" ) {
-    std::println("--- vec2 scalar division ---");
+    std::println(std::cout, "--- vec2 scalar division ---");
 
     float s = 2.0f;
     vec2 u(2.0f);
@@ -596,7 +596,7 @@ TEST_CASE( "division" ) {
   }
 
   SECTION( "vec2 vector div") {
-    std::println("--- vec2 vector division ---");
+    std::println(std::cout, "--- vec2 vector division ---");
 
     vec2 u(2.0f);
     vec2 v(1.0f);
@@ -605,7 +605,7 @@ TEST_CASE( "division" ) {
   }
 
   SECTION( "vec3 scalar div" ) {
-    std::println("--- vec3 scalar div ---");
+    std::println(std::cout, "--- vec3 scalar div ---");
 
     float s = 2.0f;
     vec3 u(2.0f);
@@ -615,7 +615,7 @@ TEST_CASE( "division" ) {
   }
 
   SECTION( "vec3 vector div") {
-    std::println("--- vec3 vector division ---");
+    std::println(std::cout, "--- vec3 vector division ---");
 
     vec3 u(2.0f);
     vec3 v(1.0f);
@@ -624,7 +624,7 @@ TEST_CASE( "division" ) {
   }
 
   SECTION( "vec4 scalar div" ) {
-    std::println("--- vec4 scalar division ---");
+    std::println(std::cout, "--- vec4 scalar division ---");
 
     float s = 2.0f;
     vec4 u(2.0f);
@@ -634,7 +634,7 @@ TEST_CASE( "division" ) {
   }
 
   SECTION( "vec4 vector div" ) {
-    std::println("--- vec4 vector division ---");
+    std::println(std::cout, "--- vec4 vector division ---");
 
     vec4 u(2.0f);
     vec4 v(1.0f);
@@ -643,7 +643,7 @@ TEST_CASE( "division" ) {
   }
 
   SECTION( "mat2 scalar div" ) {
-    std::println("--- mat2 scalar division ---");
+    std::println(std::cout, "--- mat2 scalar division ---");
 
     mat2 m = 2.0f * mat2::identity();
 
@@ -651,7 +651,7 @@ TEST_CASE( "division" ) {
   }
 
   SECTION( "mat3 scalar div" ) {
-    std::println("--- mat3 scalar division ---");
+    std::println(std::cout, "--- mat3 scalar division ---");
 
     mat3 m(2.0f);
 
@@ -659,7 +659,7 @@ TEST_CASE( "division" ) {
   }
 
   SECTION( "mat4 scalar div" ) {
-    std::println("--- mat4 scalar division ---");
+    std::println(std::cout, "--- mat4 scalar division ---");
 
     mat4 m(2.0f);
 
@@ -669,7 +669,7 @@ TEST_CASE( "division" ) {
 
 TEST_CASE( "dot product" ) {
   SECTION( "vec2" ) {
-    std::println("--- vec2 dot product ---");
+    std::println(std::cout, "--- vec2 dot product ---");
 
     vec2 u(2.0f);
     vec2 v(1.0f);
@@ -678,7 +678,7 @@ TEST_CASE( "dot product" ) {
   }
 
   SECTION( "vec3" ) {
-    std::println("--- vec3 dot product ---");
+    std::println(std::cout, "--- vec3 dot product ---");
 
     vec3 u(2.0f);
     vec3 v(1.0f);
@@ -687,7 +687,7 @@ TEST_CASE( "dot product" ) {
   }
 
   SECTION( "vec4" ) {
-    std::println("--- vec4 dot product ---");
+    std::println(std::cout, "--- vec4 dot product ---");
 
     vec4 u(2.0f);
     vec4 v(1.0f);
@@ -697,7 +697,7 @@ TEST_CASE( "dot product" ) {
 }
 
 TEST_CASE( "cross product" ) {
-  std::println("--- cross product ---");
+  std::println(std::cout, "--- cross product ---");
 
   vec3 u(1.0, 0.0, 0.0);
   vec3 v(0.0, 1.0, 0.0);
@@ -708,7 +708,7 @@ TEST_CASE( "cross product" ) {
 
 TEST_CASE( "magnitude" ) {
   SECTION( "vec2" ) {
-    std::println("--- vec2 magnitude ---");
+    std::println(std::cout, "--- vec2 magnitude ---");
 
     vec2 u(3.0f, 4.0f);
 
@@ -716,7 +716,7 @@ TEST_CASE( "magnitude" ) {
   }
 
   SECTION( "vec3" ) {
-    std::println("--- vec3 magnitude ---");
+    std::println(std::cout, "--- vec3 magnitude ---");
 
     vec3 u(2.0f, 3.0f, 6.0f);
 
@@ -724,7 +724,7 @@ TEST_CASE( "magnitude" ) {
   }
 
   SECTION( "vec4" ) {
-    std::println("--- vec4 magnitude ---");
+    std::println(std::cout, "--- vec4 magnitude ---");
 
     vec4 u(1.0f, 3.0f, 5.0, 17.0);
 
@@ -734,7 +734,7 @@ TEST_CASE( "magnitude" ) {
 
 TEST_CASE( "magnitude squared" ) {
   SECTION( "vec2" ) {
-    std::println("--- vec2 magnitude squared ---");
+    std::println(std::cout, "--- vec2 magnitude squared ---");
 
     vec2 u(3.0f, 4.0f);
 
@@ -742,7 +742,7 @@ TEST_CASE( "magnitude squared" ) {
   }
 
   SECTION( "vec3" ) {
-    std::println("--- vec3 magnitude squared ---");
+    std::println(std::cout, "--- vec3 magnitude squared ---");
 
     vec3 u(2.0f, 3.0f, 6.0f);
 
@@ -750,7 +750,7 @@ TEST_CASE( "magnitude squared" ) {
   }
 
   SECTION( "vec4" ) {
-    std::println("--- vec4 magnitude squared ---");
+    std::println(std::cout, "--- vec4 magnitude squared ---");
 
     vec4 u(1.0f, 3.0f, 5.0f, 17.0f);
 
@@ -760,7 +760,7 @@ TEST_CASE( "magnitude squared" ) {
 
 TEST_CASE( "normalized" ) {
   SECTION( "vec2" ) {
-    std::println("--- vec2 normalized ---");
+    std::println(std::cout, "--- vec2 normalized ---");
 
     vec2 u(3.0f, 4.0f);
     vec2 v(3.0f / 5.0f, 4.0f / 5.0f);
@@ -772,7 +772,7 @@ TEST_CASE( "normalized" ) {
   }
 
   SECTION( "vec3" ) {
-    std::println("--- vec3 normalized ---");
+    std::println(std::cout, "--- vec3 normalized ---");
 
     vec3 u(2.0f, 3.0f, 6.0f);
     vec3 v(2.0f / 7.0f, 3.0f / 7.0f, 6.0f / 7.0f);
@@ -784,7 +784,7 @@ TEST_CASE( "normalized" ) {
   }
 
   SECTION( "vec4" ) {
-    std::println("--- vec4 normalized ---");
+    std::println(std::cout, "--- vec4 normalized ---");
 
     vec4 u(1.0f, 3.0f, 5.0f, 17.0f);
     vec4 v(1.0f / 18.0f, 3.0f / 18.0f, 5.0f / 18.0f, 17.0f / 18.0f);
@@ -798,7 +798,7 @@ TEST_CASE( "normalized" ) {
 
 TEST_CASE( "inverse" ) {
   SECTION( "mat2" ) {
-    std::println("--- mat2 inverse ---");
+    std::println(std::cout, "--- mat2 inverse ---");
 
     mat2 a = mat2::identity();
     mat2 b = 2.0f * mat2::identity();
@@ -808,7 +808,7 @@ TEST_CASE( "inverse" ) {
   }
 
   SECTION( "mat3" ) {
-    std::println("--- mat3 inverse ---");
+    std::println(std::cout, "--- mat3 inverse ---");
 
     mat3 a = mat3::identity();
     mat3 b = 2.0f * mat3::identity();
@@ -818,7 +818,7 @@ TEST_CASE( "inverse" ) {
   }
 
   SECTION( "mat4" ) {
-    std::println("--- mat4 inverse ---");
+    std::println(std::cout, "--- mat4 inverse ---");
 
     mat4 a = mat4::identity();
     mat4 b = 2.0f * mat4::identity();
@@ -830,7 +830,7 @@ TEST_CASE( "inverse" ) {
 
 TEST_CASE( "transpose" ) {
   SECTION( "mat2" ) {
-    std::println("--- mat2 transpose ---");
+    std::println(std::cout, "--- mat2 transpose ---");
 
     mat2 a(vec2(1.0f, 2.0f), vec2(1.0f, 2.0f));
     mat2 b(vec2(1.0f, 1.0), vec2(2.0f, 2.0f));
@@ -841,7 +841,7 @@ TEST_CASE( "transpose" ) {
   }
 
   SECTION( "mat3" ) {
-    std::println("--- mat3 transpose ---");
+    std::println(std::cout, "--- mat3 transpose ---");
 
     mat3 a(vec3(1.0f, 2.0f, 3.0f), vec3(1.0f, 2.0f, 3.0f), vec3(1.0f, 2.0f, 3.0f));
     mat3 b(vec3(1.0f, 1.0f, 1.0f), vec3(2.0f, 2.0f, 2.0f), vec3(3.0f, 3.0f, 3.0f));
@@ -852,7 +852,7 @@ TEST_CASE( "transpose" ) {
   }
 
   SECTION( "mat4" ) {
-    std::println("--- mat4 transpose ---");
+    std::println(std::cout, "--- mat4 transpose ---");
 
     mat4 a(vec4(1.0f, 2.0f, 3.0f, 4.0f), vec4(1.0f, 2.0f, 3.0f, 4.0f), vec4(1.0f, 2.0f, 3.0f, 4.0f), vec4(1.0f, 2.0f, 3.0f, 4.0f));
     mat4 b(vec4(1.0f, 1.0f, 1.0f, 1.0f), vec4(2.0f, 2.0f, 2.0f, 2.0f), vec4(3.0f, 3.0f, 3.0f, 3.0f), vec4(4.0f, 4.0f, 4.0f, 4.0f));
@@ -865,7 +865,7 @@ TEST_CASE( "transpose" ) {
 
 TEST_CASE( "determinant" ) {
   SECTION( "mat2" ) {
-    std::println("--- mat2 determinant ---");
+    std::println(std::cout, "--- mat2 determinant ---");
 
     mat2 a = mat2::identity();
     mat2 b(1.0f);
@@ -877,7 +877,7 @@ TEST_CASE( "determinant" ) {
   }
 
   SECTION( "mat3" ) {
-    std::println("--- mat3 determiniant ---");
+    std::println(std::cout, "--- mat3 determiniant ---");
 
     mat3 a = mat3::identity();
     mat3 b(1.0f);
@@ -889,7 +889,7 @@ TEST_CASE( "determinant" ) {
   }
 
   SECTION( "mat4" ) {
-    std::println("--- mat4 determinant ---");
+    std::println(std::cout, "--- mat4 determinant ---");
 
     mat4 a = mat4::identity();
     mat4 b(1.0f);
@@ -908,7 +908,7 @@ TEST_CASE( "determinant" ) {
 
 TEST_CASE( "trace" ) {
   SECTION( "mat2") {
-    std::println("--- mat2 trace ---");
+    std::println(std::cout, "--- mat2 trace ---");
     CHECK( mat2(1.0f).trace() == 2.0f );
   }
 
@@ -918,14 +918,14 @@ TEST_CASE( "trace" ) {
   }
 
   SECTION( "mat4" ) {
-    std::println("--- mat4 trace ---");
+    std::println(std::cout, "--- mat4 trace ---");
     CHECK( mat4(1.0f).trace() == 4.0f );
   }
 }
 
 TEST_CASE( "identity" ) {
   SECTION( "mat2" ) {
-    std::println("--- mat2 identity ---");
+    std::println(std::cout, "--- mat2 identity ---");
 
     mat2 m = mat2::identity();
 
@@ -936,7 +936,7 @@ TEST_CASE( "identity" ) {
   }
 
   SECTION( "mat3" ) {
-    std::println("--- mat3 identity ---");
+    std::println(std::cout, "--- mat3 identity ---");
 
     mat3 m = mat3::identity();
 
@@ -947,7 +947,7 @@ TEST_CASE( "identity" ) {
   }
 
   SECTION( "mat4" ) {
-    std::println("--- mat4 identity ---");
+    std::println(std::cout, "--- mat4 identity ---");
 
     mat4 m = mat4::identity();
 
@@ -960,7 +960,7 @@ TEST_CASE( "identity" ) {
 
 TEST_CASE( "rotation" ) {
   SECTION( "mat2" ) {
-    std::println("--- mat2 rotation ---");
+    std::println(std::cout, "--- mat2 rotation ---");
 
     mat2 m = mat2::rotation(std::numbers::pi_v<float> / 2.0f);
     vec2 u(1.0f, 0.0f);
@@ -972,7 +972,7 @@ TEST_CASE( "rotation" ) {
   }
 
   SECTION( "mat3 axis rotations" ) {
-    std::println("--- mat3 axis rotations ---");
+    std::println(std::cout, "--- mat3 axis rotations ---");
 
     mat3 rx = mat3::rotation_x(std::numbers::pi_v<float> / 2.0f);
     vec3 y_axis(0.0f, 1.0f, 0.0f);
@@ -999,7 +999,7 @@ TEST_CASE( "rotation" ) {
   }
 
   SECTION( "mat3 axis-angle rotation" ) {
-    std::println("--- mat3 axis-angle rotation ---");
+    std::println(std::cout, "--- mat3 axis-angle rotation ---");
 
     vec3 z_axis(0.0f, 0.0f, 1.0f);
     mat3 rot_z = mat3::rotation(z_axis, std::numbers::pi_v<float> / 2.0f);
@@ -1022,7 +1022,7 @@ TEST_CASE( "rotation" ) {
   }
 
   SECTION( "mat3 euler rotation" ) {
-    std::println("--- mat3 euler rotation ---");
+    std::println(std::cout, "--- mat3 euler rotation ---");
 
     float pitch = std::numbers::pi_v<float> / 6.0f;
     float yaw = std::numbers::pi_v<float> / 4.0f;
@@ -1048,7 +1048,7 @@ TEST_CASE( "rotation" ) {
   }
 
   SECTION( "mat4 axis-angle rotation" ) {
-    std::println("--- mat4 axis-angle rotation ---");
+    std::println(std::cout, "--- mat4 axis-angle rotation ---");
 
     vec3 z_axis(0.0f, 0.0f, 1.0f);
     mat4 rot_z = mat4::rotation(z_axis, std::numbers::pi_v<float> / 2.0f);
@@ -1070,21 +1070,21 @@ TEST_CASE( "rotation" ) {
 
 TEST_CASE( "scale" ) {
   SECTION( "mat2" ) {
-    std::println("--- mat2 scale ---");
+    std::println(std::cout, "--- mat2 scale ---");
 
     CHECK( mat2::scale(1.0f, 1.0f) == mat2::identity() );
     CHECK( mat2::scale(2.0f, 2.0f) * vec2(1.0f, 1.0f) == vec2(2.0f, 2.0f) );
   }
 
   SECTION( "mat3" ) {
-    std::println("--- mat3 scale ---");
+    std::println(std::cout, "--- mat3 scale ---");
 
     CHECK( mat3::scale(1.0f, 1.0f, 1.0f) == mat3::identity() );
     CHECK( mat3::scale(2.0f, 3.0f, 4.0f) * vec3(1.0f, 1.0f, 1.0f) == vec3(2.0f, 3.0f, 4.0f) );
   }
 
   SECTION( "mat4" ) {
-    std::println("--- mat4 scale ---");
+    std::println(std::cout, "--- mat4 scale ---");
 
     CHECK( mat4::scale(1.0f, 1.0f, 1.0f) == mat4::identity() );
     CHECK( mat4::scale(2.0f, 3.0f, 4.0f) * vec4(1.0f, 1.0f, 1.0f, 1.0f) == vec4(2.0f, 3.0f, 4.0f, 1.0f) );
@@ -1093,7 +1093,7 @@ TEST_CASE( "scale" ) {
 
 TEST_CASE( "translation" ) {
   SECTION( "mat4" ) {
-    std::println("--- mat4 translation ---");
+    std::println(std::cout, "--- mat4 translation ---");
 
     vec3 offset(1.0f, 2.0f, 3.0f);
     mat4 trans = mat4::translation(offset);

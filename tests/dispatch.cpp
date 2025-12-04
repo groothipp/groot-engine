@@ -2,10 +2,12 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <iostream>
+
 using namespace groot;
 
 TEST_CASE( "compute dispatch" ) {
-  std::println("--- compute dispatch ---");
+  std::println(std::cout, "--- compute dispatch ---");
 
   Engine engine;
 
@@ -15,7 +17,7 @@ TEST_CASE( "compute dispatch" ) {
   RID set = engine.create_descriptor_set({ buffer });
   REQUIRE( set.is_valid() );
 
-  RID shader = engine.compile_shader(ShaderType::Compute, std::format("{}/shaders/compute.glsl", GROOT_TEST_DIR));
+  RID shader = engine.compile_shader(ShaderType::Compute, std::format("{}/dat/compute.glsl", GROOT_TEST_DIR));
   REQUIRE( shader.is_valid() );
 
   RID pipeline = engine.create_compute_pipeline(shader, set);
@@ -62,7 +64,7 @@ TEST_CASE( "invalid dispatch operations" ) {
   Engine engine;
 
   SECTION( "invalid pipeline RID" ) {
-    std::println("--- invalid pipeline RID dispatch ---");
+    std::println(std::cout, "--- invalid pipeline RID dispatch ---");
 
     RID buffer = engine.create_storage_buffer(1024);
     REQUIRE( buffer.is_valid() );
@@ -82,7 +84,7 @@ TEST_CASE( "invalid dispatch operations" ) {
   }
 
   SECTION( "non-pipeline RID" ) {
-    std::println("--- non-pipeline RID dispatch ---");
+    std::println(std::cout, "--- non-pipeline RID dispatch ---");
 
     RID buffer = engine.create_storage_buffer(1024);
     REQUIRE( buffer.is_valid() );
@@ -101,9 +103,9 @@ TEST_CASE( "invalid dispatch operations" ) {
   }
 
   SECTION( "invalid set RID" ) {
-    std::println("--- invalid descriptor set RID dispatch ---");
+    std::println(std::cout, "--- invalid descriptor set RID dispatch ---");
 
-    RID shader = engine.compile_shader(ShaderType::Compute, std::format("{}/shaders/shader.glsl", GROOT_TEST_DIR));
+    RID shader = engine.compile_shader(ShaderType::Compute, std::format("{}/dat/shader.glsl", GROOT_TEST_DIR));
     REQUIRE( shader.is_valid() );
 
     RID set = engine.create_descriptor_set({});
@@ -124,9 +126,9 @@ TEST_CASE( "invalid dispatch operations" ) {
   }
 
   SECTION( "non-descriptor-set RID" ) {
-    std::println("--- non-descriptor-set RID dispatch ---");
+    std::println(std::cout, "--- non-descriptor-set RID dispatch ---");
 
-    RID shader = engine.compile_shader(ShaderType::Compute, std::format("{}/shaders/shader.glsl", GROOT_TEST_DIR));
+    RID shader = engine.compile_shader(ShaderType::Compute, std::format("{}/dat/shader.glsl", GROOT_TEST_DIR));
     REQUIRE( shader.is_valid() );
 
     RID set = engine.create_descriptor_set({});

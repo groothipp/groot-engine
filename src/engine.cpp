@@ -1,11 +1,10 @@
 #include "src/include/allocator.hpp"
 #include "src/include/engine.hpp"
-#include "src/include/enums.hpp"
-#include "src/include/log.hpp"
 #include "src/include/renderer.hpp"
 #include "src/include/shader_compiler.hpp"
 #include "src/include/stb_image.h"
 #include "src/include/structs.hpp"
+#include "src/include/tiny_obj_loader.h"
 #include "src/include/vulkan_context.hpp"
 
 #include <GLFW/glfw3.h>
@@ -68,6 +67,15 @@ Engine::~Engine() {
         m_context->device().destroyDescriptorSetLayout(set->layout);
         m_context->device().destroyDescriptorPool(set->pool);
         delete set;
+
+        break;
+      }
+      case ResourceType::Mesh: {
+        MeshHandle * mesh = reinterpret_cast<MeshHandle *>(handle);
+
+        m_allocator->destroyBuffer(mesh->vertexBuffer);
+        m_allocator->destroyBuffer(mesh->indexBuffer);
+        delete mesh;
 
         break;
       }
@@ -313,11 +321,6 @@ RID Engine::create_texture(const std::string& path, const RID& sampler) {
     .usage        = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferDst
   });
 
-  vk::BufferImageCopy copy{
-    .bufferRowLength    = static_cast<unsigned int>(4 * width),
-    .bufferImageHeight = static_cast<unsigned int>(height),
-  };
-
   vk::CommandBuffer cmdBuf = m_context->beginTransfer();
 
   vk::ImageMemoryBarrier copyBarrier{
@@ -371,6 +374,8 @@ RID Engine::create_texture(const std::string& path, const RID& sampler) {
   );
 
   m_context->endTransfer(cmdBuf);
+
+  m_allocator->destroyBuffer(buffer);
 
   vk::ImageView view = m_context->device().createImageView(vk::ImageViewCreateInfo{
     .image = image,
@@ -963,11 +968,13 @@ RID Engine::create_graphics_pipeline(const GraphicsPipelineShaders& shaders, con
     .scissorCount   = 1
   };
 
+  auto binding = Vertex::binding();
+  auto attributes = Vertex::attributes();
   vk::PipelineVertexInputStateCreateInfo vertexInputCreateInfo{
-    .vertexBindingDescriptionCount    = static_cast<unsigned int>(s.vertex_bindings.size()),
-    .pVertexBindingDescriptions       = reinterpret_cast<const vk::VertexInputBindingDescription *>(s.vertex_bindings.data()),
-    .vertexAttributeDescriptionCount  = static_cast<unsigned int>(s.vertex_attributes.size()),
-    .pVertexAttributeDescriptions     = reinterpret_cast<const vk::VertexInputAttributeDescription *>(s.vertex_attributes.data())
+    .vertexBindingDescriptionCount    = 1,
+    .pVertexBindingDescriptions       = &binding,
+    .vertexAttributeDescriptionCount  = static_cast<unsigned int>(attributes.size()),
+    .pVertexAttributeDescriptions     = attributes.data()
   };
 
   vk::PipelineInputAssemblyStateCreateInfo assemblyCreateInfo{
@@ -1078,6 +1085,195 @@ void Engine::destroy_pipeline(RID& rid) {
   m_context->device().destroyPipelineLayout(pipeline->layout);
   m_context->device().destroyPipeline(pipeline->pipeline);
   delete pipeline;
+
+  m_resources.erase(rid);
+
+  rid.invalidate();
+}
+
+RID Engine::load_mesh(const std::string& path) {
+  tinyobj::attrib_t attrib;
+  std::vector<tinyobj::shape_t> shapes;
+  std::string err;
+
+  if (!tinyobj::LoadObj(&attrib, &shapes, nullptr, &err, path.c_str())) {
+    Log::runtime_error(std::format("failed to load object: {}", err));
+    return RID();
+  }
+
+  using IndexTrio = std::tuple<unsigned int, unsigned int, unsigned int>;
+  std::vector<Vertex> vertices;
+  std::vector<unsigned int> indices;
+  std::unordered_map<Vertex, unsigned int, Vertex::Hash> indexMap;
+
+  bool hasNormals = !attrib.normals.empty();
+  bool hasTexcoords = !attrib.texcoords.empty();
+
+  for (const auto& shape : shapes) {
+    for (const auto& index : shape.mesh.indices) {
+      Vertex v{};
+
+      v.position = vec3(
+        attrib.vertices[3 * index.vertex_index],
+        attrib.vertices[3 * index.vertex_index + 1],
+        attrib.vertices[3 * index.vertex_index + 2]
+      );
+
+      if (hasTexcoords) {
+        v.uv = vec2(
+          attrib.texcoords[2 * index.texcoord_index],
+          attrib.texcoords[2 * index.texcoord_index + 1]
+        );
+      }
+
+      if (hasNormals) {
+        v.normal = vec3(
+          attrib.normals[3 * index.normal_index],
+          attrib.normals[3 * index.normal_index + 1],
+          attrib.normals[3 * index.normal_index + 2]
+        );
+      }
+
+      if (!indexMap.contains(v)) {
+        indexMap[v] = static_cast<unsigned int>(vertices.size());
+        vertices.emplace_back(v);
+      }
+
+      indices.emplace_back(indexMap.at(v));
+    }
+  }
+
+  if (!hasTexcoords) {
+    Log::warn(std::format("mesh '{}' is missing UVs, generating planar projection", path));
+
+    vec3 minBounds = vertices[0].position;
+    vec3 maxBounds = vertices[0].position;
+
+    for (const auto& vertex : vertices) {
+      minBounds.x = std::min(minBounds.x, vertex.position.x);
+      minBounds.y = std::min(minBounds.y, vertex.position.y);
+      minBounds.z = std::min(minBounds.z, vertex.position.z);
+
+      maxBounds.x = std::max(maxBounds.x, vertex.position.x);
+      maxBounds.y = std::max(maxBounds.y, vertex.position.y);
+      maxBounds.z = std::max(maxBounds.z, vertex.position.z);
+    }
+
+    vec3 size = maxBounds - minBounds;
+
+    for (auto& vertex : vertices) {
+      vec3 normalized = (vertex.position - minBounds) / size;
+
+      if (size.x >= size.y && size.x >= size.z) {
+        vertex.uv = vec2(normalized.y, normalized.z);
+        continue;
+      }
+
+      if (size.y >= size.x && size.y >= size.z) {
+        vertex.uv = vec2(normalized.x, normalized.z);
+        continue;
+      }
+
+      vertex.uv = vec2(normalized.x, normalized.y);
+    }
+  }
+
+  if (!hasNormals) {
+    Log::warn(std::format("mesh '{}' is missing normals, calculating face normals", path));
+
+    for (std::size_t i = 0; i < indices.size(); i += 3) {
+      unsigned int i0 = indices[i];
+      unsigned int i1 = indices[i + 1];
+      unsigned int i2 = indices[i + 2];
+
+      vec3 v0 = vertices[i0].position;
+      vec3 v1 = vertices[i1].position;
+      vec3 v2 = vertices[i2].position;
+
+      vec3 edge1 = v1 - v0;
+      vec3 edge2 = v2 - v0;
+      vec3 faceNormal = edge1.cross(edge2);
+
+      vertices[i0].normal = vertices[i0].normal + faceNormal;
+      vertices[i1].normal = vertices[i1].normal + faceNormal;
+      vertices[i2].normal = vertices[i2].normal + faceNormal;
+    }
+
+    for (auto& vertex : vertices)
+      vertex.normal = vertex.normal.normalized();
+  }
+
+  vk::Buffer vertexStaging = m_allocator->allocateBuffer(vk::BufferCreateInfo{
+    .size   = sizeof(Vertex) * vertices.size(),
+    .usage  = vk::BufferUsageFlagBits::eTransferSrc
+  });
+
+  void * map = m_allocator->mapBuffer(vertexStaging);
+  std::memcpy(map, vertices.data(), sizeof(Vertex) * vertices.size());
+  m_allocator->unmapBuffer(vertexStaging);
+
+  vk::Buffer indexStaging = m_allocator->allocateBuffer(vk::BufferCreateInfo{
+    .size   = sizeof(unsigned int) * indices.size(),
+    .usage  = vk::BufferUsageFlagBits::eTransferSrc
+  });
+
+  map = m_allocator->mapBuffer(indexStaging);
+  std::memcpy(map, indices.data(), sizeof(unsigned int) * indices.size());
+  m_allocator->unmapBuffer(indexStaging);
+
+  vk::Buffer vertexBuffer = m_allocator->allocateBuffer(vk::BufferCreateInfo{
+    .size   = sizeof(Vertex) * vertices.size(),
+    .usage  = vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst
+  });
+
+  vk::Buffer indexBuffer = m_allocator->allocateBuffer(vk::BufferCreateInfo{
+    .size   = sizeof(unsigned int) * indices.size(),
+    .usage  = vk::BufferUsageFlagBits::eIndexBuffer | vk::BufferUsageFlagBits::eTransferDst
+  });
+
+  vk::CommandBuffer cmdBuf = m_context->beginTransfer();
+
+  cmdBuf.copyBuffer(vertexStaging, vertexBuffer, vk::BufferCopy{
+    .size = sizeof(Vertex) * vertices.size()
+  });
+
+  cmdBuf.copyBuffer(indexStaging, indexBuffer, vk::BufferCopy{
+    .size = sizeof(unsigned int) * indices.size()
+  });
+
+  m_context->endTransfer(cmdBuf);
+
+  m_allocator->destroyBuffer(vertexStaging);
+  m_allocator->destroyBuffer(indexStaging);
+
+  MeshHandle * mesh = new MeshHandle;
+
+  mesh->vertexBuffer = vertexBuffer;
+  mesh->indexBuffer = indexBuffer;
+  mesh->indexCount = indices.size();
+
+  RID rid(m_nextRID++, ResourceType::Mesh);
+  m_resources[rid] = reinterpret_cast<unsigned long>(mesh);
+
+  return rid;
+}
+
+void Engine::destroy_mesh(RID& rid) {
+  if (!rid.is_valid()) {
+    Log::warn("tried to destroy invalid mesh RID");
+    return;
+  }
+
+  if (rid.m_type != ResourceType::Mesh) {
+    Log::warn("tried to destroy mesh of non-mesh RID");
+    return;
+  }
+
+  MeshHandle * mesh = reinterpret_cast<MeshHandle *>(m_resources.at(rid));
+
+  m_allocator->destroyBuffer(mesh->vertexBuffer);
+  m_allocator->destroyBuffer(mesh->indexBuffer);
+  delete mesh;
 
   m_resources.erase(rid);
 

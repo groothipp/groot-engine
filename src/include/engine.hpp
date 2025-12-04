@@ -105,6 +105,9 @@ class alignas(64) Engine {
     RID create_graphics_pipeline(const GraphicsPipelineShaders&, const RID&, const GraphicsPipelineSettings&);
     void destroy_pipeline(RID&);
 
+    RID load_mesh(const std::string&);
+    void destroy_mesh(RID&);
+
     void compute_command(const ComputeCommand&);
     void dispatch();
 

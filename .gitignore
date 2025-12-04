@@ -4,6 +4,6 @@ build/
 
 # Files
 .DS_Store
-commit
-todo
-test-output
+commit.txt
+todo.txt
+test_output.txt
