@@ -48,6 +48,10 @@ Renderer::Renderer(GLFWwindow * window, const VulkanContext * context, Settings&
   }
 }
 
+std::pair<unsigned int, unsigned int> Renderer::extent() const {
+  return std::make_pair(m_extent.width, m_extent.height);
+}
+
 vk::Format Renderer::depthFormat() const {
   return m_depthFormat;
 }

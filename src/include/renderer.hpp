@@ -33,6 +33,7 @@ class Renderer {
     Renderer& operator=(Renderer&&) = delete;
 
     vk::Format depthFormat() const;
+    std::pair<unsigned int, unsigned int> extent() const;
 
     void destroy(const vk::Device&);
 

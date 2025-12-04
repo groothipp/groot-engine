@@ -19,6 +19,7 @@ class Allocator;
 class VulkanContext;
 class ShaderCompiler;
 class Renderer;
+class Object;
 
 class alignas(64) Engine {
   Settings m_settings;
@@ -35,6 +36,10 @@ class alignas(64) Engine {
 
   std::queue<ComputeCommand> m_computeCmds;
 
+  std::set<RID> m_scene;
+  mat4 m_cameraView = mat4::view(vec3(0.0f, 0.0f, -2.0f), vec3(0.0f), vec3(0.0f, -1.0f, 0.0f));
+  mat4 m_cameraProjection = mat4::identity();
+
   double m_frameTime = 0.0;
   double m_time = 0.0;
   double m_accumulator = 0.0;
@@ -48,6 +53,10 @@ class alignas(64) Engine {
 
     Engine& operator=(const Engine&) = delete;
     Engine& operator=(Engine&&) = delete;
+
+    mat4 camera_view() const;
+    mat4 camera_projection() const;
+    std::pair<unsigned int, unsigned int> viewport_dims() const;
 
     void run(std::function<void(double)> code = [](double){});
 
@@ -110,6 +119,9 @@ class alignas(64) Engine {
 
     void compute_command(const ComputeCommand&);
     void dispatch();
+
+    void add_to_scene(Object&);
+    void remove_from_scene(Object&);
 
   private:
     void updateTimes();

@@ -64,4 +64,8 @@ std::array<vk::VertexInputAttributeDescription, 3> Vertex::attributes() {
   };
 }
 
+mat4 Transform::matrix() const {
+  return mat4::translation(position) * mat4::rotation(rotation) * mat4::scale(scale.x, scale.y, scale.z);
+}
+
 } // namespace groot

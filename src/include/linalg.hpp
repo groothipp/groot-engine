@@ -311,7 +311,7 @@ class mat4 {
 
     static mat4 identity();
     static mat4 translation(const vec3&);
-    static mat4 rotation(const vec3&, float);
+    static mat4 rotation(const vec3&);
     static mat4 scale(float, float, float);
     static mat4 view(const vec3&, const vec3&, const vec3&);
     static mat4 perspective_projection(float, float, float, float);

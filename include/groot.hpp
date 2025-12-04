@@ -366,168 +366,7 @@ struct Settings {
   Format color_format = Format::bgra8_srgb;
   ColorSpace color_space = ColorSpace::srgb_nonlinear;
   RenderMode render_mode = RenderMode::TripleBuffer;
-};
-
-class RID {
-  friend class Engine;
-
-  unsigned long m_id = ~(0x0);
-  ResourceType m_type = ResourceType::Invalid;
-
-  public:
-    struct Hash {
-      std::size_t operator()(const RID&) const;
-    };
-
-  public:
-    RID() = default;
-    RID(const RID&) = default;
-    RID(RID&&) = default;
-
-    ~RID() = default;
-
-    RID& operator=(const RID&) = default;
-    RID& operator=(RID&&) = default;
-
-    bool operator==(const RID&) const;
-    bool operator<(const RID&) const;
-    bool operator>(const RID&) const;
-    const unsigned long& operator*() const;
-
-    bool is_valid() const;
-
-  private:
-    explicit RID(unsigned long, ResourceType);
-
-    void invalidate();
-};
-
-struct GraphicsPipelineShaders {
-  RID vertex = RID();
-  RID fragment = RID();
-  RID tesselation_control = RID();
-  RID tesselation_evaluation = RID();
-};
-
-struct GraphicsPipelineSettings {
-  MeshType mesh_type = MeshType::Solid;
-  CullMode cull_mode = CullMode::Back;
-  DrawDirection draw_direction = DrawDirection::CounterClockwise;
-  bool enable_depth = true;
-  bool enable_blend = true;
-};
-
-struct SamplerSettings {
-  Filter mag_filter = Filter::Linear;
-  Filter min_filter = Filter::Linear;
-  SampleMode mode_u = SampleMode::Repeat;
-  SampleMode mode_v = SampleMode::Repeat;
-  bool anisotropic_filtering = true;
-};
-
-struct ComputeCommand {
-  RID pipeline = RID();
-  RID descriptor_set = RID();
-  std::vector<uint8_t> push_constants;
-  bool barrier = false;
-  std::tuple<unsigned int, unsigned int, unsigned int> work_groups = { 1, 1, 1 };
-};
-
-class alignas(64) Engine {
-  Settings m_settings;
-  GLFWwindow * m_window = nullptr;
-  VulkanContext * m_context = nullptr;
-  Allocator * m_allocator = nullptr;
-  ShaderCompiler * m_compiler = nullptr;
-  Renderer * m_renderer = nullptr;
-
-  unsigned long m_nextRID = 0;
-  std::unordered_map<RID, unsigned long, RID::Hash> m_resources;
-  std::set<RID> m_busySamplers;
-  std::set<unsigned long> m_storageTextures;
-
-  std::queue<ComputeCommand> m_computeCmds;
-
-  double m_frameTime = 0.0;
-  double m_time = 0.0;
-  double m_accumulator = 0.0;
-
-  public:
-    explicit Engine(const Settings& settings = Settings{});
-    Engine(const Engine&) = delete;
-    Engine(Engine&&) = delete;
-
-    ~Engine();
-
-    Engine& operator=(const Engine&) = delete;
-    Engine& operator=(Engine&&) = delete;
-
-    void run(std::function<void(double)> code = [](double){});
-
-    RID create_uniform_buffer(unsigned int);
-    RID create_storage_buffer(unsigned int);
-    void destroy_buffer(RID&);
-
-    template <typename T>
-    inline std::vector<T> read_buffer(const RID& rid) const {
-      auto [size, data] = read_buffer_raw(rid);
-      if (size == 0) return {};
-
-      std::vector<T> out(static_cast<T *>(data), static_cast<T *>(data) + (size / sizeof(T)));
-      delete [] static_cast<char *>(data);
-
-      return out;
-    }
-
-    template <typename T>
-    inline T read_buffer(const RID& rid, const T& error) const {
-      auto [size, data] = read_buffer_raw(rid);
-      if (size == 0) return error;
-
-      T out = *static_cast<T *>(data);
-      delete [] static_cast<char *>(data);
-
-      return out;
-    }
-
-    template <typename T>
-    inline void write_buffer(const RID& rid, const std::vector<T>& data) const {
-      write_buffer_raw(rid, sizeof(T) * data.size(), data.data());
-    }
-
-    template <typename T>
-    inline void write_buffer(const RID& rid, const T& data) const {
-      write_buffer_raw(rid, sizeof(T), &data);
-    }
-
-    RID create_sampler(const SamplerSettings&);
-    void destroy_sampler(RID&);
-
-    RID create_storage_image(unsigned int, unsigned int, Format format = Format::rgba16_unorm);
-    RID create_texture(const std::string&, const RID&);
-    RID create_storage_texture(unsigned int, unsigned int, const RID&, Format format = Format::rgba16_unorm);
-    void destroy_image(RID&);
-
-    RID compile_shader(ShaderType type, const std::string&);
-    void destroy_shader(RID&);
-
-    RID create_descriptor_set(const std::vector<RID>&);
-    void destroy_descriptor_set(RID&);
-
-    RID create_compute_pipeline(const RID&, const RID&);
-    RID create_graphics_pipeline(const GraphicsPipelineShaders&, const RID&, const GraphicsPipelineSettings&);
-    void destroy_pipeline(RID&);
-
-    RID load_mesh(const std::string&);
-    void destroy_mesh(RID&);
-
-    void compute_command(const ComputeCommand&);
-    void dispatch();
-
-  private:
-    void updateTimes();
-    std::pair<unsigned int, void *> read_buffer_raw(const RID&) const;
-    void write_buffer_raw(const RID&, std::size_t, const void *) const;
+  float fov = 70.0f;
 };
 
 class mat2 {
@@ -648,13 +487,218 @@ class mat4 {
 
     static mat4 identity();
     static mat4 translation(const vec3&);
-    static mat4 rotation(const vec3&, float);
+    static mat4 rotation(const vec3&);
     static mat4 scale(float, float, float);
     static mat4 view(const vec3&, const vec3&, const vec3&);
     static mat4 perspective_projection(float, float, float, float);
 
   private:
     mat3 getMinorMatrix(unsigned int, unsigned int) const;
+};
+
+struct Transform {
+  vec3 position;
+  vec3 rotation;
+  vec3 scale;
+
+  mat4 matrix() const;
+};
+
+class RID {
+  friend class Engine;
+
+  unsigned long m_id = ~(0x0);
+  ResourceType m_type = ResourceType::Invalid;
+
+  public:
+    struct Hash {
+      std::size_t operator()(const RID&) const;
+    };
+
+  public:
+    RID() = default;
+    RID(const RID&) = default;
+    RID(RID&&) = default;
+
+    ~RID() = default;
+
+    RID& operator=(const RID&) = default;
+    RID& operator=(RID&&) = default;
+
+    bool operator==(const RID&) const;
+    bool operator<(const RID&) const;
+    bool operator>(const RID&) const;
+    const unsigned long& operator*() const;
+
+    bool is_valid() const;
+
+  private:
+    explicit RID(unsigned long, ResourceType);
+
+    void invalidate();
+};
+
+struct GraphicsPipelineShaders {
+  RID vertex = RID();
+  RID fragment = RID();
+  RID tesselation_control = RID();
+  RID tesselation_evaluation = RID();
+};
+
+struct GraphicsPipelineSettings {
+  MeshType mesh_type = MeshType::Solid;
+  CullMode cull_mode = CullMode::Back;
+  DrawDirection draw_direction = DrawDirection::CounterClockwise;
+  bool enable_depth = true;
+  bool enable_blend = true;
+};
+
+struct SamplerSettings {
+  Filter mag_filter = Filter::Linear;
+  Filter min_filter = Filter::Linear;
+  SampleMode mode_u = SampleMode::Repeat;
+  SampleMode mode_v = SampleMode::Repeat;
+  bool anisotropic_filtering = true;
+};
+
+struct ComputeCommand {
+  RID pipeline = RID();
+  RID descriptor_set = RID();
+  std::vector<uint8_t> push_constants;
+  bool barrier = false;
+  std::tuple<unsigned int, unsigned int, unsigned int> work_groups = { 1, 1, 1 };
+};
+
+class alignas(64) Object {
+  friend class Engine;
+
+  RID m_mesh;
+  RID m_pipeline;
+  RID m_set;
+
+  public:
+    Object() = default;
+    Object(const Object&) = default;
+    Object(Object&&);
+
+    ~Object() = default;
+
+    Object& operator=(const Object&) = default;
+    Object& operator=(Object&&) = default;
+
+    bool is_in_scene() const;
+
+    void set_mesh(const RID&);
+    void set_pipeline(const RID&);
+    void set_descriptor_set(const RID&);
+};
+
+class alignas(64) Engine {
+  Settings m_settings;
+  GLFWwindow * m_window = nullptr;
+  VulkanContext * m_context = nullptr;
+  Allocator * m_allocator = nullptr;
+  ShaderCompiler * m_compiler = nullptr;
+  Renderer * m_renderer = nullptr;
+
+  unsigned long m_nextRID = 0;
+  std::unordered_map<RID, unsigned long, RID::Hash> m_resources;
+  std::set<RID> m_busySamplers;
+  std::set<unsigned long> m_storageTextures;
+
+  std::queue<ComputeCommand> m_computeCmds;
+
+  std::set<RID> m_scene;
+  mat4 m_cameraView = mat4::view(vec3(0.0f, 0.0f, -2.0f), vec3(0.0f), vec3(0.0f, -1.0f, 0.0f));
+  mat4 m_cameraProjection = mat4::identity();
+
+  double m_frameTime = 0.0;
+  double m_time = 0.0;
+  double m_accumulator = 0.0;
+
+  public:
+    explicit Engine(const Settings& settings = Settings{});
+    Engine(const Engine&) = delete;
+    Engine(Engine&&) = delete;
+
+    ~Engine();
+
+    Engine& operator=(const Engine&) = delete;
+    Engine& operator=(Engine&&) = delete;
+
+    mat4 camera_view() const;
+    mat4 camera_projection() const;
+    std::pair<unsigned int, unsigned int> viewport_dims() const;
+
+    void run(std::function<void(double)> code = [](double){});
+
+    RID create_uniform_buffer(unsigned int);
+    RID create_storage_buffer(unsigned int);
+    void destroy_buffer(RID&);
+
+    template <typename T>
+    inline std::vector<T> read_buffer(const RID& rid) const {
+      auto [size, data] = read_buffer_raw(rid);
+      if (size == 0) return {};
+
+      std::vector<T> out(static_cast<T *>(data), static_cast<T *>(data) + (size / sizeof(T)));
+      delete [] static_cast<char *>(data);
+
+      return out;
+    }
+
+    template <typename T>
+    inline T read_buffer(const RID& rid, const T& error) const {
+      auto [size, data] = read_buffer_raw(rid);
+      if (size == 0) return error;
+
+      T out = *static_cast<T *>(data);
+      delete [] static_cast<char *>(data);
+
+      return out;
+    }
+
+    template <typename T>
+    inline void write_buffer(const RID& rid, const std::vector<T>& data) const {
+      write_buffer_raw(rid, sizeof(T) * data.size(), data.data());
+    }
+
+    template <typename T>
+    inline void write_buffer(const RID& rid, const T& data) const {
+      write_buffer_raw(rid, sizeof(T), &data);
+    }
+
+    RID create_sampler(const SamplerSettings&);
+    void destroy_sampler(RID&);
+
+    RID create_storage_image(unsigned int, unsigned int, Format format = Format::rgba16_unorm);
+    RID create_texture(const std::string&, const RID&);
+    RID create_storage_texture(unsigned int, unsigned int, const RID&, Format format = Format::rgba16_unorm);
+    void destroy_image(RID&);
+
+    RID compile_shader(ShaderType type, const std::string&);
+    void destroy_shader(RID&);
+
+    RID create_descriptor_set(const std::vector<RID>&);
+    void destroy_descriptor_set(RID&);
+
+    RID create_compute_pipeline(const RID&, const RID&);
+    RID create_graphics_pipeline(const GraphicsPipelineShaders&, const RID&, const GraphicsPipelineSettings&);
+    void destroy_pipeline(RID&);
+
+    RID load_mesh(const std::string&);
+    void destroy_mesh(RID&);
+
+    void compute_command(const ComputeCommand&);
+    void dispatch();
+
+    void add_to_scene(Object&);
+    void remove_from_scene(Object&);
+
+  private:
+    void updateTimes();
+    std::pair<unsigned int, void *> read_buffer_raw(const RID&) const;
+    void write_buffer_raw(const RID&, std::size_t, const void *) const;
 };
 
 } // namespace groot

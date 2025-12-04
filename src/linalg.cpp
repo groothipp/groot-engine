@@ -401,8 +401,8 @@ mat4 mat4::translation(const vec3 & pos) {
   );
 }
 
-mat4 mat4::rotation(const vec3 & axis, float angle) {
-  mat4 rot(mat3::rotation(axis, angle));
+mat4 mat4::rotation(const vec3 & rotator) {
+  mat4 rot(mat3::euler_rotation(rotator.x, rotator.y, rotator.z));
   rot.m_col4.w = 1.0f;
   return rot;
 }

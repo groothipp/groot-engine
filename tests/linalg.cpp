@@ -1047,24 +1047,35 @@ TEST_CASE( "rotation" ) {
     CHECK( (pitch_only[2] - expected_pitch[2]).mag() < TOLERANCE );
   }
 
-  SECTION( "mat4 axis-angle rotation" ) {
+  SECTION( "mat4 euler rotation" ) {
     std::println(std::cout, "--- mat4 axis-angle rotation ---");
 
-    vec3 z_axis(0.0f, 0.0f, 1.0f);
-    mat4 rot_z = mat4::rotation(z_axis, std::numbers::pi_v<float> / 2.0f);
-    vec4 test_vec(1.0f, 0.0f, 0.0f, 1.0f);
-    vec4 result = rot_z * test_vec;
-    vec4 expected(0.0f, 1.0f, 0.0f, 1.0f);
+    float pitch = std::numbers::pi_v<float> / 6.0f;
+    float yaw = std::numbers::pi_v<float> / 4.0f;
+    float roll = std::numbers::pi_v<float> / 3.0f;
 
-    CHECK( (result - expected).mag() < TOLERANCE );
+    mat4 euler = mat4::rotation(vec3(pitch, yaw, roll));
+    mat4 composed = mat4(mat3::rotation_z(roll) * mat3::rotation_x(pitch) * mat3::rotation_y(yaw));
+    composed[3][3] = 1.0f;
 
-    mat4 identity_rot = mat4::rotation(vec3(1.0f, 0.0f, 0.0f), 0.0f);
-    mat4 identity_expected = mat4::identity();
+    CHECK( (euler[0] - composed[0]).mag() < TOLERANCE );
+    CHECK( (euler[1] - composed[1]).mag() < TOLERANCE );
+    CHECK( (euler[2] - composed[2]).mag() < TOLERANCE );
 
-    CHECK( (identity_rot[0] - identity_expected[0]).mag() < TOLERANCE );
-    CHECK( (identity_rot[1] - identity_expected[1]).mag() < TOLERANCE );
-    CHECK( (identity_rot[2] - identity_expected[2]).mag() < TOLERANCE );
-    CHECK( (identity_rot[3] - identity_expected[3]).mag() < TOLERANCE );
+    mat4 zero_euler = mat4::rotation(vec3(0.0f));
+    CHECK( (zero_euler[0] - mat4::identity()[0]).mag() < TOLERANCE );
+    CHECK( (zero_euler[1] - mat4::identity()[1]).mag() < TOLERANCE );
+    CHECK( (zero_euler[2] - mat4::identity()[2]).mag() < TOLERANCE );
+    CHECK( (zero_euler[3] - mat4::identity()[3]).mag() < TOLERANCE );
+
+    mat4 pitch_only = mat4::rotation(vec3(pitch, 0.0f, 0.0f));
+    mat4 expected_pitch = mat4(mat3::rotation_x(pitch));
+    expected_pitch[3][3] = 1.0f;
+
+    CHECK( (pitch_only[0] - expected_pitch[0]).mag() < TOLERANCE );
+    CHECK( (pitch_only[1] - expected_pitch[1]).mag() < TOLERANCE );
+    CHECK( (pitch_only[2] - expected_pitch[2]).mag() < TOLERANCE );
+    CHECK( (pitch_only[3] - expected_pitch[3]).mag() < TOLERANCE );
   }
 }
 

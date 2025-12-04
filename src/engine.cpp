@@ -1,5 +1,6 @@
 #include "src/include/allocator.hpp"
 #include "src/include/engine.hpp"
+#include "src/include/object.hpp"
 #include "src/include/renderer.hpp"
 #include "src/include/shader_compiler.hpp"
 #include "src/include/stb_image.h"
@@ -42,6 +43,10 @@ Engine::Engine(const Settings& settings) : m_settings(settings) {
   m_allocator = new Allocator(m_context, m_context->gpu().getProperties().apiVersion);
   m_compiler = new ShaderCompiler();
   m_renderer = new Renderer(m_window, m_context, m_settings);
+
+  auto [w, h] = m_renderer->extent();
+  float ar = static_cast<float>(w) / static_cast<float>(h);
+  m_cameraProjection = mat4::perspective_projection(m_settings.fov, ar, 0.1f, 1000.0f);
 }
 
 Engine::~Engine() {
@@ -109,6 +114,18 @@ Engine::~Engine() {
 
   glfwDestroyWindow(m_window);
   glfwTerminate();
+}
+
+mat4 Engine::camera_view() const {
+  return m_cameraView;
+}
+
+mat4 Engine::camera_projection() const {
+  return m_cameraProjection;
+}
+
+std::pair<unsigned int, unsigned int> Engine::viewport_dims() const {
+  return m_renderer->extent();
 }
 
 void Engine::run(std::function<void(double)> code) {
@@ -1350,6 +1367,26 @@ void Engine::dispatch() {
   }
 
   m_context->endDispatch(cmdBuf);
+}
+
+void Engine::add_to_scene(Object& object) {
+  if (object.is_in_scene()) {
+    Log::warn("tried to add object to scene that was already added to the scene");
+    return;
+  }
+
+  object.m_id.m_id = m_nextRID++;
+  m_scene.emplace(object.m_id);
+}
+
+void Engine::remove_from_scene(Object& object) {
+  if (!object.is_in_scene()) {
+    Log::warn("tried to remove object from scene that was not in the scene");
+    return;
+  }
+
+  m_scene.erase(object.m_id);
+  object.m_id.invalidate();
 }
 
 void Engine::updateTimes() {

@@ -28,6 +28,7 @@ struct Settings {
   Format color_format = Format::bgra8_srgb;
   ColorSpace color_space = ColorSpace::srgb_nonlinear;
   RenderMode render_mode = RenderMode::TripleBuffer;
+  float fov = 70.0f;
 };
 
 struct GraphicsPipelineShaders {
@@ -97,6 +98,14 @@ struct MeshHandle {
   vk::Buffer vertexBuffer = nullptr;
   vk::Buffer indexBuffer  = nullptr;
   unsigned int indexCount = 0;
+};
+
+struct Transform {
+  vec3 position;
+  vec3 rotation;
+  vec3 scale;
+
+  mat4 matrix() const;
 };
 
 } // namespace groot

@@ -8,6 +8,7 @@ namespace groot {
 
 class RID {
   friend class Engine;
+  friend class Object;
 
   unsigned long m_id = ~(0x0);
   ResourceType m_type = ResourceType::Invalid;

@@ -12,6 +12,7 @@ set(TESTS_SOURCES
   ${CMAKE_CURRENT_SOURCE_DIR}/images.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/linalg.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/mesh.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/objects.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/pipelines.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/shader_compilation.cpp
 )
