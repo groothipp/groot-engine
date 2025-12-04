@@ -87,7 +87,7 @@ TEST_CASE( "invalid image operations" ) {
   }
 
   SECTION( "destroy invalid RID" ) {
-    std::println("--- destroy image with invalid RID ---");
+    std::println(std::cout, "--- destroy image with invalid RID ---");
 
     RID rid;
     engine.destroy_image(rid);

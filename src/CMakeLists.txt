@@ -1,8 +1,13 @@
 project(GrootEngine::Engine)
 
-find_package(Vulkan REQUIRED)
+find_package(Vulkan REQUIRED COMPONENTS shaderc_combined)
 find_package(glfw3 REQUIRED)
-find_library(SHADERC_LIB shaderc_combined REQUIRED)
+
+# Find shaderc dependencies
+find_library(GLSLANG_LIB NAMES glslang REQUIRED)
+find_library(SPIRV_LIB NAMES SPIRV REQUIRED)
+find_library(SPIRV_TOOLS_LIB NAMES SPIRV-Tools REQUIRED)
+find_library(SPIRV_TOOLS_OPT_LIB NAMES SPIRV-Tools-opt REQUIRED)
 
 set(ENGINE_INCLUDES
   ${CMAKE_CURRENT_SOURCE_DIR}/include/allocator.hpp
@@ -56,5 +61,9 @@ target_compile_definitions(groot PRIVATE
 target_link_libraries(groot PRIVATE
   Vulkan::Vulkan
   glfw
-  ${SHADERC_LIB}
+  Vulkan::shaderc_combined
+  ${GLSLANG_LIB}
+  ${SPIRV_LIB}
+  ${SPIRV_TOOLS_LIB}
+  ${SPIRV_TOOLS_OPT_LIB}
 )

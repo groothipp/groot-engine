@@ -913,7 +913,7 @@ TEST_CASE( "trace" ) {
   }
 
   SECTION( "mat3" ) {
-    std::println("--- mat3 trace ---");
+    std::println(std::cout, "--- mat3 trace ---");
     CHECK( mat3(1.0f).trace() == 3.0f );
   }
 
