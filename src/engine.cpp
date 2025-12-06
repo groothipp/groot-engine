@@ -46,7 +46,7 @@ Engine::Engine(const Settings& settings) : m_settings(settings) {
 
   auto [w, h] = m_renderer->extent();
   float ar = static_cast<float>(w) / static_cast<float>(h);
-  m_cameraProjection = mat4::perspective_projection(m_settings.fov, ar, 0.1f, 1000.0f);
+  m_cameraProjection = mat4::perspective_projection(radians(m_settings.fov), ar, 0.1f, 1000.0f);
 }
 
 Engine::~Engine() {
@@ -106,7 +106,7 @@ Engine::~Engine() {
     }
   }
 
-  m_renderer->destroy(m_context->device());
+  m_renderer->destroy(m_context);
   delete m_renderer;
 
   delete m_allocator;
@@ -133,11 +133,19 @@ void Engine::run(std::function<void(double)> code) {
     updateTimes();
     glfwPollEvents();
 
+    unsigned int imgIndex = m_renderer->prepFrame(m_context->device());
+    transitionImagesCompute();
+
     while (m_accumulator >= m_settings.time_step) {
       code(m_settings.time_step);
       m_accumulator -= m_settings.time_step;
     }
+
+    transitionImagesGraphics(m_renderer->renderBuffer());
+    m_renderer->render(m_context, m_scene, m_resources, imgIndex);
   }
+
+  m_context->device().waitIdle();
 }
 
 RID Engine::create_uniform_buffer(unsigned int size) {
@@ -451,6 +459,30 @@ RID Engine::create_storage_texture(unsigned int width, unsigned int height, cons
   };
 
   vk::Image image = m_allocator->allocateImage(imageCreateInfo);
+
+  vk::CommandBuffer cmdBuf = m_context->beginTransfer();
+
+  vk::ImageMemoryBarrier shaderBarrier{
+    .oldLayout        = vk::ImageLayout::eUndefined,
+    .newLayout        = vk::ImageLayout::eShaderReadOnlyOptimal,
+    .image            = image,
+    .subresourceRange = {
+      .aspectMask = vk::ImageAspectFlagBits::eColor,
+      .levelCount = 1,
+      .layerCount = 1
+    }
+  };
+
+  cmdBuf.pipelineBarrier(
+    vk::PipelineStageFlagBits::eTopOfPipe,
+    vk::PipelineStageFlagBits::eTopOfPipe,
+    vk::DependencyFlags(),
+    nullptr,
+    nullptr,
+    shaderBarrier
+  );
+
+  m_context->endTransfer(cmdBuf);
 
   vk::ImageViewCreateInfo viewCreateInfo{
     .image = image,
@@ -1160,6 +1192,11 @@ RID Engine::load_mesh(const std::string& path) {
     }
   }
 
+  if (vertices.empty() || indices.empty()) {
+    Log::warn(std::format("mesh '{}' has no geometry", path));
+    return RID();
+  }
+
   if (!hasTexcoords) {
     Log::warn(std::format("mesh '{}' is missing UVs, generating planar projection", path));
 
@@ -1224,6 +1261,7 @@ RID Engine::load_mesh(const std::string& path) {
     .size   = sizeof(Vertex) * vertices.size(),
     .usage  = vk::BufferUsageFlagBits::eTransferSrc
   });
+  Log::generic("created vertex staging buffer");
 
   void * map = m_allocator->mapBuffer(vertexStaging);
   std::memcpy(map, vertices.data(), sizeof(Vertex) * vertices.size());
@@ -1233,6 +1271,7 @@ RID Engine::load_mesh(const std::string& path) {
     .size   = sizeof(unsigned int) * indices.size(),
     .usage  = vk::BufferUsageFlagBits::eTransferSrc
   });
+  Log::generic("created index staging buffer");
 
   map = m_allocator->mapBuffer(indexStaging);
   std::memcpy(map, indices.data(), sizeof(unsigned int) * indices.size());
@@ -1241,12 +1280,14 @@ RID Engine::load_mesh(const std::string& path) {
   vk::Buffer vertexBuffer = m_allocator->allocateBuffer(vk::BufferCreateInfo{
     .size   = sizeof(Vertex) * vertices.size(),
     .usage  = vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst
-  });
+  }, VMA_MEMORY_USAGE_GPU_ONLY, 0);
+  Log::generic("created vertex buffer");
 
   vk::Buffer indexBuffer = m_allocator->allocateBuffer(vk::BufferCreateInfo{
     .size   = sizeof(unsigned int) * indices.size(),
     .usage  = vk::BufferUsageFlagBits::eIndexBuffer | vk::BufferUsageFlagBits::eTransferDst
-  });
+  }, VMA_MEMORY_USAGE_GPU_ONLY, 0);
+  Log::generic("created index buffer");
 
   vk::CommandBuffer cmdBuf = m_context->beginTransfer();
 
@@ -1355,12 +1396,14 @@ void Engine::dispatch() {
       nullptr
     );
 
-    cmdBuf.pushConstants<uint8_t>(
-      pipeline->layout,
-      vk::ShaderStageFlagBits::eCompute,
-      0,
-      cmd.push_constants
-    );
+    if (!cmd.push_constants.empty()) {
+      cmdBuf.pushConstants<uint8_t>(
+        pipeline->layout,
+        vk::ShaderStageFlagBits::eCompute,
+        0,
+        cmd.push_constants
+      );
+    }
 
     auto [x, y, z] = cmd.work_groups;
     cmdBuf.dispatch(x, y, z);
@@ -1376,7 +1419,7 @@ void Engine::add_to_scene(Object& object) {
   }
 
   object.m_id.m_id = m_nextRID++;
-  m_scene.emplace(object.m_id);
+  m_scene.emplace(object);
 }
 
 void Engine::remove_from_scene(Object& object) {
@@ -1385,7 +1428,7 @@ void Engine::remove_from_scene(Object& object) {
     return;
   }
 
-  m_scene.erase(object.m_id);
+  m_scene.erase(object);
   object.m_id.invalidate();
 }
 
@@ -1444,6 +1487,66 @@ void Engine::write_buffer_raw(const RID& rid, std::size_t size, const void * dat
   void * map = m_allocator->mapBuffer(buffer);
   std::memcpy(map, data, size);
   m_allocator->unmapBuffer(buffer);
+}
+
+void Engine::transitionImagesCompute() const {
+  if (m_storageTextures.empty()) return;
+
+  vk::CommandBuffer cmdBuf = m_context->beginDispatch();
+
+  for (const auto& image : m_storageTextures) {
+    vk::ImageMemoryBarrier barrier {
+      .srcAccessMask    = vk::AccessFlagBits::eShaderRead,
+      .dstAccessMask    = vk::AccessFlagBits::eShaderRead | vk::AccessFlagBits::eShaderWrite,
+      .oldLayout        = vk::ImageLayout::eShaderReadOnlyOptimal,
+      .newLayout        = vk::ImageLayout::eGeneral,
+      .image            = reinterpret_cast<VkImage>(image),
+      .subresourceRange = {
+        .aspectMask = vk::ImageAspectFlagBits::eColor,
+        .levelCount = 1,
+        .layerCount = 1
+      }
+    };
+
+    cmdBuf.pipelineBarrier(
+      vk::PipelineStageFlagBits::eFragmentShader,
+      vk::PipelineStageFlagBits::eComputeShader,
+      vk::DependencyFlags(),
+      nullptr,
+      nullptr,
+      barrier
+    );
+  }
+
+  m_context->endDispatch(cmdBuf);
+}
+
+void Engine::transitionImagesGraphics(const vk::CommandBuffer& cmdBuf) const {
+  if (m_storageTextures.empty()) return;
+
+  for (const auto& image : m_storageTextures) {
+    vk::ImageMemoryBarrier barrier {
+      .srcAccessMask    = vk::AccessFlagBits::eShaderWrite,
+      .dstAccessMask    = vk::AccessFlagBits::eShaderRead,
+      .oldLayout        = vk::ImageLayout::eGeneral,
+      .newLayout        = vk::ImageLayout::eShaderReadOnlyOptimal,
+      .image            = reinterpret_cast<VkImage>(image),
+      .subresourceRange = {
+        .aspectMask = vk::ImageAspectFlagBits::eColor,
+        .levelCount = 1,
+        .layerCount = 1
+      }
+    };
+
+    cmdBuf.pipelineBarrier(
+      vk::PipelineStageFlagBits::eComputeShader,
+      vk::PipelineStageFlagBits::eFragmentShader,
+      vk::DependencyFlags(),
+      nullptr,
+      nullptr,
+      barrier
+    );
+  }
 }
 
 } // namespace groot

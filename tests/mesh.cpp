@@ -12,7 +12,7 @@ TEST_CASE( "load mesh" ) {
 
   Engine engine;
 
-  RID mesh = engine.load_mesh(std::format("{}/dat/mesh.obj", GROOT_TEST_DIR));
+  RID mesh = engine.load_mesh(std::format("{}/dat/cube.obj", GROOT_TEST_DIR));
 
   CHECK( mesh.is_valid() );
 }
@@ -22,7 +22,7 @@ TEST_CASE( "destroy mesh" ) {
 
   Engine engine;
 
-  RID mesh = engine.load_mesh(std::format("{}/dat/mesh.obj", GROOT_TEST_DIR));
+  RID mesh = engine.load_mesh(std::format("{}/dat/cube.obj", GROOT_TEST_DIR));
   REQUIRE( mesh.is_valid() );
 
   engine.destroy_mesh(mesh);
@@ -62,5 +62,12 @@ TEST_CASE( "invalid mesh operations" ) {
 
     engine.destroy_mesh(buffer);
     CHECK( buffer.is_valid() );
+  }
+
+  SECTION( "0 geometry mesh" ) {
+    std::println(std::cout, "--- load mesh with no geometry ---");
+
+    RID mesh = engine.load_mesh(std::format("{}/dat/badmesh.obj", GROOT_TEST_DIR));
+    CHECK_FALSE( mesh.is_valid() );
   }
 }

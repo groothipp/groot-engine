@@ -4,12 +4,19 @@
 #include <compare>
 #include <cstdint>
 #include <functional>
+#include <numbers>
 #include <set>
 #include <queue>
 #include <string>
 #include <unordered_map>
 
 class GLFWwindow;
+
+namespace vk {
+
+class CommandBuffer;
+
+} // namespace vk
 
 namespace groot {
 
@@ -140,7 +147,7 @@ struct Vec3 {
   inline Vec3 operator/(T rhs) const { return Vec3(x / rhs, y / rhs, z / rhs); }
 
   inline T dot(const Vec3& vec) const { return x * vec.x + y * vec.y + z * vec.z; }
-  inline Vec3 cross(const Vec3& vec) const { return Vec3(y * vec.z - vec.z * y, z * vec.x - x * vec.z, x * vec.y - y * vec.x); }
+  inline Vec3 cross(const Vec3& vec) const { return Vec3(y * vec.z - z * vec.y, z * vec.x - x * vec.z, x * vec.y - y * vec.x); }
   inline T mag() const { return std::sqrt(dot(*this)); }
   inline T mag_squared() const { return dot(*this); }
   inline Vec3 normalized() const { return *this / mag(); }
@@ -367,6 +374,8 @@ struct Settings {
   ColorSpace color_space = ColorSpace::srgb_nonlinear;
   RenderMode render_mode = RenderMode::TripleBuffer;
   float fov = 70.0f;
+  unsigned int flight_frames = 3;
+  vec4 background_color = vec4(0.0f, 0.0f, 0.0f, 1.0f);
 };
 
 class mat2 {
@@ -497,9 +506,9 @@ class mat4 {
 };
 
 struct Transform {
-  vec3 position;
-  vec3 rotation;
-  vec3 scale;
+  vec3 position = vec3(0.0f);
+  vec3 rotation = vec3(0.0f);
+  vec3 scale = vec3(1.0f);
 
   mat4 matrix() const;
 };
@@ -571,20 +580,24 @@ struct ComputeCommand {
 
 class alignas(64) Object {
   friend class Engine;
+  friend class Renderer;
 
+  RID m_id;
   RID m_mesh;
   RID m_pipeline;
   RID m_set;
 
   public:
     Object() = default;
-    Object(const Object&) = default;
-    Object(Object&&);
+    Object(const Object&);
+    Object(Object&&) = default;
 
     ~Object() = default;
 
-    Object& operator=(const Object&) = default;
+    Object& operator=(const Object&);
     Object& operator=(Object&&) = default;
+
+    bool operator<(const Object&) const;
 
     bool is_in_scene() const;
 
@@ -608,8 +621,8 @@ class alignas(64) Engine {
 
   std::queue<ComputeCommand> m_computeCmds;
 
-  std::set<RID> m_scene;
-  mat4 m_cameraView = mat4::view(vec3(0.0f, 0.0f, -2.0f), vec3(0.0f), vec3(0.0f, -1.0f, 0.0f));
+  std::set<Object> m_scene;
+  mat4 m_cameraView = mat4::view(vec3(0.0f, 0.0f, 2.0f), vec3(0.0f), vec3(0.0f, 1.0f, 0.0f));
   mat4 m_cameraProjection = mat4::identity();
 
   double m_frameTime = 0.0;
@@ -699,7 +712,13 @@ class alignas(64) Engine {
     void updateTimes();
     std::pair<unsigned int, void *> read_buffer_raw(const RID&) const;
     void write_buffer_raw(const RID&, std::size_t, const void *) const;
+    void transitionImagesCompute() const;
+    void transitionImagesGraphics(const vk::CommandBuffer&) const;
 };
+
+inline float radians(float deg) {
+  return std::numbers::pi_v<float> / 180.0 * deg;
+}
 
 } // namespace groot
 

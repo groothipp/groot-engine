@@ -1,4 +1,5 @@
 #include "src/include/log.hpp"
+#include "vulkan/vulkan.hpp"
 #include "src/include/vulkan_context.hpp"
 
 #include <vulkan/vulkan_beta.h>
@@ -60,6 +61,7 @@ VulkanContext::VulkanContext(const std::string& applicationName, const unsigned 
 VulkanContext::~VulkanContext() {
   m_device.destroyCommandPool(m_transferCmdPool);
   m_device.destroyCommandPool(m_computeCmdPool);
+  m_device.destroyCommandPool(m_graphicsCmdPool);
   m_device.destroy();
   m_instance.destroySurfaceKHR(m_surface);
   m_instance.destroy();
@@ -165,6 +167,57 @@ void VulkanContext::endDispatch(const vk::CommandBuffer& cmdBuf) const {
     Log::runtime_error("hung waiting for compute dispatch");
 }
 
+std::vector<vk::CommandBuffer> VulkanContext::createRenderBuffers(unsigned int count) const {
+  return m_device.allocateCommandBuffers(vk::CommandBufferAllocateInfo{
+    .commandPool        = m_graphicsCmdPool,
+    .level              = vk::CommandBufferLevel::ePrimary,
+    .commandBufferCount = count
+  });
+}
+
+std::vector<vk::Fence> VulkanContext::createFlightFences(unsigned int count) const {
+  std::vector<vk::Fence> fences;
+  for (unsigned int i = 0; i < count; ++i)
+    fences.emplace_back(m_device.createFence(vk::FenceCreateInfo{ .flags = vk::FenceCreateFlagBits::eSignaled }));
+  return fences;
+}
+
+std::vector<vk::Semaphore> VulkanContext::createRenderSemaphores(unsigned int count) const {
+  std::vector<vk::Semaphore> semaphores;
+  for (unsigned int i = 0; i < count; ++i)
+    semaphores.emplace_back(m_device.createSemaphore(vk::SemaphoreCreateInfo{}));
+  return semaphores;
+}
+
+void VulkanContext::destroyRenderBuffers(std::vector<vk::CommandBuffer>& bufs) const {
+  m_device.freeCommandBuffers(m_graphicsCmdPool, bufs);
+  bufs.clear();
+}
+
+void VulkanContext::submitRender(const RenderInfo& info) const {
+  vk::PipelineStageFlags waitStage = vk::PipelineStageFlagBits::eColorAttachmentOutput;
+  m_graphicsQueue.submit(vk::SubmitInfo{
+    .waitSemaphoreCount   = 1,
+    .pWaitSemaphores      = &info.imageSemaphore,
+    .pWaitDstStageMask    = &waitStage,
+    .commandBufferCount   = 1,
+    .pCommandBuffers      = &info.cmdBuf,
+    .signalSemaphoreCount = 1,
+    .pSignalSemaphores    = &info.renderSemaphore
+  }, info.fence);
+
+  vk::PresentInfoKHR presentInfo{
+    .waitSemaphoreCount = 1,
+    .pWaitSemaphores    = &info.renderSemaphore,
+    .swapchainCount     = 1,
+    .pSwapchains        = &info.swapchain,
+    .pImageIndices      = &info.imgIndex
+  };
+
+  if (m_presentQueue.presentKHR(presentInfo) != vk::Result::eSuccess)
+    Log::runtime_error("failed to present image");
+}
+
 void VulkanContext::createSurface(GLFWwindow * window) {
   VkSurfaceKHR rawSurface = nullptr;
   if (glfwCreateWindowSurface(m_instance, window, nullptr, &rawSurface) != VK_SUCCESS)
@@ -254,6 +307,11 @@ void VulkanContext::createCommandPools() {
   m_computeCmdPool = m_device.createCommandPool(vk::CommandPoolCreateInfo{
     .flags            = vk::CommandPoolCreateFlagBits::eTransient,
     .queueFamilyIndex = (m_queueFamilyIndices >> COMPUTE_SHIFT) & 0xFF
+  });
+
+  m_graphicsCmdPool = m_device.createCommandPool(vk::CommandPoolCreateInfo{
+    .flags            = vk::CommandPoolCreateFlagBits::eResetCommandBuffer,
+    .queueFamilyIndex = (m_queueFamilyIndices >> GRAPHICS_SHIFT) & 0xFF
   });
 }
 

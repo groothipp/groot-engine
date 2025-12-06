@@ -419,22 +419,22 @@ mat4 mat4::view(const vec3& eye, const vec3& target, const vec3& up) {
   vec3 u = r.cross(f).normalized();
 
   return mat4(
-    vec4(r.x, u.x, f.x, 0.0f),
-    vec4(r.y, u.y, f.y, 0.0f),
-    vec4(r.z, u.z, f.z, 0.0f),
-    vec4(-r.dot(eye), -u.dot(eye), -f.dot(eye), 1.0f)
+    vec4(r.x, u.x, -f.x, 0.0f),
+    vec4(r.y, u.y, -f.y, 0.0f),
+    vec4(r.z, u.z, -f.z, 0.0f),
+    vec4(-r.dot(eye), -u.dot(eye), f.dot(eye), 1.0f)
   );
 }
 
 mat4 mat4::perspective_projection(float fov, float ar, float near, float far) {
-  float tanFov = std::tan(0.5 * fov);
+  float tanFov = std::tan(0.5f * fov);
   float range = far - near;
 
   return mat4(
     vec4(1.0f / (ar * tanFov), 0.0f, 0.0f, 0.0f),
     vec4(0.0f, -1.0f / tanFov, 0.0f, 0.0f),
-    vec4(0.0f, 0.0f, far / range, 1.0f),
-    vec4(0.0f, 0.0f, -(far * near) / range, 0.0f)
+    vec4(0.0f, 0.0f, -far / range, -1.0f),
+    vec4(0.0f, 0.0f, -(near * far) / range, 0.0f)
   );
 }
 

@@ -29,6 +29,8 @@ struct Settings {
   ColorSpace color_space = ColorSpace::srgb_nonlinear;
   RenderMode render_mode = RenderMode::TripleBuffer;
   float fov = 70.0f;
+  unsigned int flight_frames = 3;
+  vec4 background_color = vec4(0.0f, 0.0f, 0.0f, 1.0f);
 };
 
 struct GraphicsPipelineShaders {
@@ -101,11 +103,20 @@ struct MeshHandle {
 };
 
 struct Transform {
-  vec3 position;
-  vec3 rotation;
-  vec3 scale;
+  vec3 position = vec3(0.0f);
+  vec3 rotation = vec3(0.0f);
+  vec3 scale = vec3(1.0f);
 
   mat4 matrix() const;
+};
+
+struct RenderInfo {
+  vk::CommandBuffer cmdBuf = nullptr;
+  vk::Fence fence = nullptr;
+  vk::Semaphore imageSemaphore = nullptr;
+  vk::Semaphore renderSemaphore = nullptr;
+  vk::SwapchainKHR swapchain = nullptr;
+  unsigned int imgIndex = 0;
 };
 
 } // namespace groot

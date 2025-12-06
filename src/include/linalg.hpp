@@ -4,6 +4,7 @@
 
 #include <cmath>
 #include <compare>
+#include <numbers>
 
 namespace groot::detail {
 
@@ -113,7 +114,7 @@ struct Vec3 {
   inline Vec3 operator/(T rhs) const { return Vec3(x / rhs, y / rhs, z / rhs); }
 
   inline T dot(const Vec3& vec) const { return x * vec.x + y * vec.y + z * vec.z; }
-  inline Vec3 cross(const Vec3& vec) const { return Vec3(y * vec.z - vec.z * y, z * vec.x - x * vec.z, x * vec.y - y * vec.x); }
+  inline Vec3 cross(const Vec3& vec) const { return Vec3(y * vec.z - z * vec.y, z * vec.x - x * vec.z, x * vec.y - y * vec.x); }
   inline T mag() const { return std::sqrt(dot(*this)); }
   inline T mag_squared() const { return dot(*this); }
   inline Vec3 normalized() const { return *this / mag(); }
@@ -319,6 +320,10 @@ class mat4 {
   private:
     mat3 getMinorMatrix(unsigned int, unsigned int) const;
 };
+
+inline float radians(float deg) {
+  return std::numbers::pi_v<float> / 180.0 * deg;
+}
 
 } // namespace groot
 

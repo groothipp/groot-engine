@@ -35,16 +35,17 @@ vk::Buffer Allocator::allocateBuffer(const vk::BufferCreateInfo& bufferCreateInf
 
   VkBuffer buffer = nullptr;
   VmaAllocation allocation = nullptr;
-  if (vmaCreateBuffer(
+  vk::Result res = vk::Result(vmaCreateBuffer(
     m_allocator,
     reinterpret_cast<const VkBufferCreateInfo *>(&bufferCreateInfo),
     &allocationCreateInfo,
     &buffer,
     &allocation,
     nullptr
-  ) != VK_SUCCESS) {
-    Log::runtime_error("failed to create buffer");
-  }
+  ));
+
+  if (res != vk::Result::eSuccess)
+    Log::runtime_error(std::format("failed to create buffer: {}", vk::to_string(res)));
 
   m_buffers[buffer] = allocation;
   return buffer;

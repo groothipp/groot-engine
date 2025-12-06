@@ -1,4 +1,5 @@
 #include "src/include/log.hpp"
+#include "src/include/object.hpp"
 #include "src/include/renderer.hpp"
 #include "src/include/structs.hpp"
 #include "src/include/vulkan_context.hpp"
@@ -14,6 +15,13 @@ Renderer::Renderer(GLFWwindow * window, const VulkanContext * context, Settings&
   m_depthFormat = getDepthFormat(context);
   m_presentMode = checkPresentMode(context, settings);
   m_extent = getExtent(window, context);
+
+  m_clearColor.float32[0] = settings.background_color.x;
+  m_clearColor.float32[1] = settings.background_color.y;
+  m_clearColor.float32[2] = settings.background_color.z;
+  m_clearColor.float32[3] = settings.background_color.w;
+
+  m_flightFrames = settings.flight_frames;
 
   vk::SurfaceCapabilitiesKHR capabilities = context->gpu().getSurfaceCapabilitiesKHR(context->surface());
   unsigned int imageCount = capabilities.minImageCount + 1;
@@ -46,6 +54,11 @@ Renderer::Renderer(GLFWwindow * window, const VulkanContext * context, Settings&
       }
     }));
   }
+
+  m_cmds = context->createRenderBuffers(m_flightFrames);
+  m_fences = context->createFlightFences(m_flightFrames);
+  m_imageSemaphores = context->createRenderSemaphores(m_flightFrames);
+  m_renderSemaphores = context->createRenderSemaphores(m_flightFrames);
 }
 
 std::pair<unsigned int, unsigned int> Renderer::extent() const {
@@ -56,10 +69,167 @@ vk::Format Renderer::depthFormat() const {
   return m_depthFormat;
 }
 
-void Renderer::destroy(const vk::Device& device) {
+unsigned int Renderer::prepFrame(const vk::Device& device) const {
+  if (device.waitForFences(m_fences[m_frameIndex], true, 1000000000) != vk::Result::eSuccess)
+    Log::runtime_error("hung waiting for next frame");
+
+  auto [res, imgIndex] = device.acquireNextImageKHR(
+    m_swapchain, 1000000000, m_imageSemaphores[m_frameIndex], nullptr
+  );
+  if (res != vk::Result::eSuccess)
+    Log::runtime_error("hung waiting for next render target");
+
+  device.resetFences(m_fences[m_frameIndex]);
+
+  m_cmds[m_frameIndex].reset();
+  m_cmds[m_frameIndex].begin(vk::CommandBufferBeginInfo{});
+
+  vk::ImageMemoryBarrier barrier{
+    .dstAccessMask = vk::AccessFlagBits::eColorAttachmentWrite,
+    .oldLayout      = vk::ImageLayout::eUndefined,
+    .newLayout      = vk::ImageLayout::eColorAttachmentOptimal,
+    .image          = m_images[imgIndex],
+    .subresourceRange = {
+      .aspectMask = vk::ImageAspectFlagBits::eColor,
+      .levelCount = 1,
+      .layerCount = 1
+    }
+  };
+
+  m_cmds[m_frameIndex].pipelineBarrier(
+    vk::PipelineStageFlagBits::eTopOfPipe,
+    vk::PipelineStageFlagBits::eColorAttachmentOutput,
+    vk::DependencyFlags(),
+    nullptr,
+    nullptr,
+    barrier
+  );
+
+  return imgIndex;
+}
+
+const vk::CommandBuffer& Renderer::renderBuffer() const {
+  return m_cmds[m_frameIndex];
+}
+
+void Renderer::render(
+  const VulkanContext * context,
+  const std::set<Object>& scene,
+  const std::unordered_map<RID, unsigned long, RID::Hash>& resources,
+  unsigned int imgIndex
+) {
+  vk::RenderingAttachmentInfo color{
+      .imageView    = m_views[imgIndex],
+      .imageLayout  = vk::ImageLayout::eColorAttachmentOptimal,
+      .loadOp       = vk::AttachmentLoadOp::eClear,
+      .storeOp      = vk::AttachmentStoreOp::eStore,
+      .clearValue   = { m_clearColor }
+    };
+
+    // vk::RenderingAttachmentInfo depth{
+    //   .imageView    = m_depthView,
+    //   .imageLayout  = vk::ImageLayout::eDepthAttachmentOptimal,
+    //   .loadOp       = vk::AttachmentLoadOp::eClear,
+    //   .storeOp      = vk::AttachmentStoreOp::eDontCare,
+    //   .clearValue   = { .depthStencil = { 1, 0 } }
+    // };
+
+    m_cmds[m_frameIndex].beginRendering(vk::RenderingInfo{
+      .renderArea = {
+        .extent = m_extent
+      },
+      .layerCount           = 1,
+      .colorAttachmentCount = 1,
+      .pColorAttachments    = &color,
+      .pDepthAttachment     = nullptr
+    });
+
+    m_cmds[m_frameIndex].setViewport(0, vk::Viewport{
+      .x        = 0,
+      .y        = 0,
+      .width    = static_cast<float>(m_extent.width),
+      .height   = static_cast<float>(m_extent.height),
+      .minDepth = 0,
+      .maxDepth = 1
+    });
+
+    m_cmds[m_frameIndex].setScissor(0, vk::Rect2D{ .extent = m_extent });
+
+  for (const auto& object : scene) {
+    PipelineHandle * pipeline = reinterpret_cast<PipelineHandle *>(resources.at(object.m_pipeline));
+    DescriptorSetHandle * set = reinterpret_cast<DescriptorSetHandle *>(resources.at(object.m_set));
+    MeshHandle * mesh = reinterpret_cast<MeshHandle *>(resources.at(object.m_mesh));
+
+    m_cmds[m_frameIndex].bindPipeline(vk::PipelineBindPoint::eGraphics, pipeline->pipeline);
+
+    m_cmds[m_frameIndex].bindDescriptorSets(
+      vk::PipelineBindPoint::eGraphics,
+      pipeline->layout,
+      0,
+      1,
+      &set->set,
+      0,
+      nullptr
+    );
+
+    m_cmds[m_frameIndex].bindVertexBuffers(0, mesh->vertexBuffer, { 0 });
+    m_cmds[m_frameIndex].bindIndexBuffer(mesh->indexBuffer, 0, vk::IndexType::eUint32);
+    m_cmds[m_frameIndex].drawIndexed(mesh->indexCount, 1, 0, 0, 0);
+  }
+
+  m_cmds[m_frameIndex].endRendering();
+
+  vk::ImageMemoryBarrier barrier{
+    .srcAccessMask  = vk::AccessFlagBits::eColorAttachmentWrite,
+    .oldLayout      = vk::ImageLayout::eColorAttachmentOptimal,
+    .newLayout      = vk::ImageLayout::ePresentSrcKHR,
+    .image          = m_images[imgIndex],
+    .subresourceRange = {
+      .aspectMask = vk::ImageAspectFlagBits::eColor,
+      .levelCount = 1,
+      .layerCount = 1
+    }
+  };
+
+  m_cmds[m_frameIndex].pipelineBarrier(
+    vk::PipelineStageFlagBits::eColorAttachmentOutput,
+    vk::PipelineStageFlagBits::eBottomOfPipe,
+    vk::DependencyFlags(),
+    nullptr,
+    nullptr,
+    barrier
+  );
+
+  m_cmds[m_frameIndex].end();
+
+  context->submitRender(RenderInfo{
+    .cmdBuf           = m_cmds[m_frameIndex],
+    .fence            = m_fences[m_frameIndex],
+    .imageSemaphore   = m_imageSemaphores[m_frameIndex],
+    .renderSemaphore  = m_renderSemaphores[m_frameIndex],
+    .swapchain        = m_swapchain,
+    .imgIndex         = imgIndex
+  });
+
+  m_frameIndex = (m_frameIndex + 1) % m_flightFrames;
+}
+
+void Renderer::destroy(const VulkanContext * context) {
+  context->destroyRenderBuffers(m_cmds);
+
+  for (const auto& fence : m_fences)
+    context->device().destroyFence(fence);
+
+  for (const auto& semaphore : m_imageSemaphores)
+    context->device().destroySemaphore(semaphore);
+
+  for (const auto& semaphore : m_renderSemaphores)
+    context->device().destroySemaphore(semaphore);
+
   for (const auto& view : m_views)
-    device.destroyImageView(view);
-  device.destroySwapchainKHR(m_swapchain);
+    context->device().destroyImageView(view);
+
+  context->device().destroySwapchainKHR(m_swapchain);
 }
 
 vk::SurfaceFormatKHR Renderer::checkFormat(const VulkanContext * context, Settings& settings) const {
@@ -81,15 +251,12 @@ vk::SurfaceFormatKHR Renderer::checkFormat(const VulkanContext * context, Settin
 }
 
 vk::Format Renderer::getDepthFormat(const VulkanContext * context) const {
-  std::set<vk::Format> formats;
-  for (const auto& format : context->gpu().getSurfaceFormatsKHR(context->surface())) {
-    formats.emplace(format.format);
-  }
-
-  if (formats.contains(vk::Format::eD32Sfloat))
+  vk::FormatProperties props = context->gpu().getFormatProperties(vk::Format::eD32Sfloat);
+  if (props.optimalTilingFeatures & vk::FormatFeatureFlagBits::eDepthStencilAttachment)
     return vk::Format::eD32Sfloat;
 
-  if (formats.contains(vk::Format::eD24UnormS8Uint))
+  props = context->gpu().getFormatProperties(vk::Format::eD24UnormS8Uint);
+  if (props.optimalTilingFeatures & vk::FormatFeatureFlagBits::eDepthStencilAttachment)
     return vk::Format::eD24UnormS8Uint;
 
   return vk::Format::eD16Unorm;

@@ -6,6 +6,7 @@ namespace groot {
 
 class alignas(64) Object {
   friend class Engine;
+  friend class Renderer;
 
   RID m_id;
   RID m_mesh;
@@ -21,6 +22,8 @@ class alignas(64) Object {
 
     Object& operator=(const Object&);
     Object& operator=(Object&&) = default;
+
+    bool operator<(const Object&) const;
 
     bool is_in_scene() const;
 

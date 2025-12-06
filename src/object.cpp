@@ -17,6 +17,10 @@ Object& Object::operator=(const Object& obj) {
   return *this;
 }
 
+bool Object::operator<(const Object& rhs) const {
+  return m_id < rhs.m_id;
+}
+
 bool Object::is_in_scene() const {
   return m_id.is_valid();
 }

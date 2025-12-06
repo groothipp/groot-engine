@@ -1,5 +1,7 @@
 #pragma once
 
+#include "src/include/structs.hpp"
+
 #include <vulkan/vulkan.hpp>
 
 class GLFWwindow;
@@ -20,6 +22,7 @@ class VulkanContext {
 
   vk::CommandPool m_transferCmdPool = nullptr;
   vk::CommandPool m_computeCmdPool = nullptr;
+  vk::CommandPool m_graphicsCmdPool = nullptr;
 
   public:
     VulkanContext(const std::string&, const unsigned int&);
@@ -43,6 +46,11 @@ class VulkanContext {
     void endTransfer(const vk::CommandBuffer&) const;
     vk::CommandBuffer beginDispatch() const;
     void endDispatch(const vk::CommandBuffer&) const;
+    std::vector<vk::CommandBuffer> createRenderBuffers(unsigned int) const;
+    std::vector<vk::Fence> createFlightFences(unsigned int) const;
+    std::vector<vk::Semaphore> createRenderSemaphores(unsigned int) const;
+    void destroyRenderBuffers(std::vector<vk::CommandBuffer>&) const;
+    void submitRender(const RenderInfo&) const;
 
     void createSurface(GLFWwindow *);
     void chooseGPU(const unsigned int&, const std::vector<const char *>&);

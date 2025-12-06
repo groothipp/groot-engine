@@ -36,8 +36,8 @@ class alignas(64) Engine {
 
   std::queue<ComputeCommand> m_computeCmds;
 
-  std::set<RID> m_scene;
-  mat4 m_cameraView = mat4::view(vec3(0.0f, 0.0f, -2.0f), vec3(0.0f), vec3(0.0f, -1.0f, 0.0f));
+  std::set<Object> m_scene;
+  mat4 m_cameraView = mat4::view(vec3(0.0f, 0.0f, 2.0f), vec3(0.0f), vec3(0.0f, 1.0f, 0.0f));
   mat4 m_cameraProjection = mat4::identity();
 
   double m_frameTime = 0.0;
@@ -127,6 +127,8 @@ class alignas(64) Engine {
     void updateTimes();
     std::pair<unsigned int, void *> read_buffer_raw(const RID&) const;
     void write_buffer_raw(const RID&, std::size_t, const void *) const;
+    void transitionImagesCompute() const;
+    void transitionImagesGraphics(const vk::CommandBuffer&) const;
 };
 
 } // namespace groot

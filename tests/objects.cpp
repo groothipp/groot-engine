@@ -26,7 +26,7 @@ TEST_CASE( "add to scene" ) {
   }, set, {});
   REQUIRE( pipeline.is_valid() );
 
-  RID mesh = engine.load_mesh(std::format("{}/dat/mesh.obj", GROOT_TEST_DIR));
+  RID mesh = engine.load_mesh(std::format("{}/dat/cube.obj", GROOT_TEST_DIR));
   REQUIRE( mesh.is_valid() );
 
   Object obj;
@@ -59,7 +59,7 @@ TEST_CASE( "remove from scene" ) {
   }, set, {});
   REQUIRE( pipeline.is_valid() );
 
-  RID mesh = engine.load_mesh(std::format("{}/dat/mesh.obj", GROOT_TEST_DIR));
+  RID mesh = engine.load_mesh(std::format("{}/dat/cube.obj", GROOT_TEST_DIR));
   REQUIRE( mesh.is_valid() );
 
   Object obj;
