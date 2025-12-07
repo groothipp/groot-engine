@@ -13,6 +13,7 @@ set(ENGINE_INCLUDES
   ${CMAKE_CURRENT_SOURCE_DIR}/include/allocator.hpp
   ${CMAKE_CURRENT_SOURCE_DIR}/include/engine.hpp
   ${CMAKE_CURRENT_SOURCE_DIR}/include/enums.hpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/input_manager.hpp
   ${CMAKE_CURRENT_SOURCE_DIR}/include/linalg.hpp
   ${CMAKE_CURRENT_SOURCE_DIR}/include/log.hpp
   ${CMAKE_CURRENT_SOURCE_DIR}/include/object.hpp
@@ -28,6 +29,7 @@ set(ENGINE_INCLUDES
 set(ENGINE_SOURCES
   ${CMAKE_CURRENT_SOURCE_DIR}/allocator.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/engine.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/input_manager.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/linalg.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/log.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/object.cpp

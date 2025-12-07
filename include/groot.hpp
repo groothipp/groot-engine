@@ -228,6 +228,7 @@ using ivec4 = detail::Vec4<int>;
 using uvec4 = detail::Vec4<unsigned int>;
 
 class Allocator;
+class InputManager;
 class Renderer;
 class ShaderCompiler;
 class VulkanContext;
@@ -361,6 +362,138 @@ enum RenderMode {
   NoSync,
   TripleBuffer,
   VSync
+};
+
+enum class MouseButton {
+  Left      = 0,
+  Right     = 1,
+  Middle    = 2,
+  Button4   = 3,
+  Button5   = 4,
+  Button6   = 5,
+  Button7   = 6,
+  Button8   = 7
+};
+
+enum class Key {
+  Space         = 32,
+  Apostrophe    = 39,
+  Comma         = 44,
+  Minus         = 45,
+  Period        = 46,
+  Slash         = 47,
+  Num0          = 48,
+  Num1          = 49,
+  Num2          = 50,
+  Num3          = 51,
+  Num4          = 52,
+  Num5          = 53,
+  Num6          = 54,
+  Num7          = 55,
+  Num8          = 56,
+  Num9          = 57,
+  Semicolon     = 59,
+  Equal         = 61,
+  A             = 65,
+  B             = 66,
+  C             = 67,
+  D             = 68,
+  E             = 69,
+  F             = 70,
+  G             = 71,
+  H             = 72,
+  I             = 73,
+  J             = 74,
+  K             = 75,
+  L             = 76,
+  M             = 77,
+  N             = 78,
+  O             = 79,
+  P             = 80,
+  Q             = 81,
+  R             = 82,
+  S             = 83,
+  T             = 84,
+  U             = 85,
+  V             = 86,
+  W             = 87,
+  X             = 88,
+  Y             = 89,
+  Z             = 90,
+  LeftBracket   = 91,
+  Backslash     = 92,
+  RightBracket  = 93,
+  GraveAccent   = 96,
+  Escape        = 256,
+  Enter         = 257,
+  Tab           = 258,
+  Backspace     = 259,
+  Insert        = 260,
+  Delete        = 261,
+  Right         = 262,
+  Left          = 263,
+  Down          = 264,
+  Up            = 265,
+  PageUp        = 266,
+  PageDown      = 267,
+  Home          = 268,
+  End           = 269,
+  CapsLock      = 280,
+  ScrollLock    = 281,
+  NumLock       = 282,
+  PrintScreen   = 283,
+  Pause         = 284,
+  F1            = 290,
+  F2            = 291,
+  F3            = 292,
+  F4            = 293,
+  F5            = 294,
+  F6            = 295,
+  F7            = 296,
+  F8            = 297,
+  F9            = 298,
+  F10           = 299,
+  F11           = 300,
+  F12           = 301,
+  F13           = 302,
+  F14           = 303,
+  F15           = 304,
+  F16           = 305,
+  F17           = 306,
+  F18           = 307,
+  F19           = 308,
+  F20           = 309,
+  F21           = 310,
+  F22           = 311,
+  F23           = 312,
+  F24           = 313,
+  F25           = 314,
+  Kp0           = 320,
+  Kp1           = 321,
+  Kp2           = 322,
+  Kp3           = 323,
+  Kp4           = 324,
+  Kp5           = 325,
+  Kp6           = 326,
+  Kp7           = 327,
+  Kp8           = 328,
+  Kp9           = 329,
+  KpDecimal     = 330,
+  KpDivide      = 331,
+  KpMultiply    = 332,
+  KpSubtract    = 333,
+  KpAdd         = 334,
+  KpEnter       = 335,
+  KpEqual       = 336,
+  LeftShift     = 340,
+  LeftControl   = 341,
+  LeftAlt       = 342,
+  LeftSuper     = 343,
+  RightShift    = 344,
+  RightControl  = 345,
+  RightAlt      = 346,
+  RightSuper    = 347,
+  Menu          = 348
 };
 
 struct Settings {
@@ -614,6 +747,7 @@ class alignas(64) Engine {
   Allocator * m_allocator = nullptr;
   ShaderCompiler * m_compiler = nullptr;
   Renderer * m_renderer = nullptr;
+  InputManager * m_inputManager = nullptr;
 
   unsigned long m_nextRID = 0;
   std::unordered_map<RID, unsigned long, RID::Hash> m_resources;
@@ -623,8 +757,8 @@ class alignas(64) Engine {
   std::queue<ComputeCommand> m_computeCmds;
 
   std::set<Object> m_scene;
-  mat4 m_cameraView = mat4::view(vec3(0.0f, 0.0f, 2.0f), vec3(0.0f), vec3(0.0f, 1.0f, 0.0f));
-  mat4 m_cameraProjection = mat4::identity();
+  vec3 m_cameraEye = vec3(0.0f, 0.0f, 2.0f);
+  vec3 m_cameraTarget = vec3(0.0f);
 
   double m_frameTime = 0.0;
   double m_time = 0.0;
@@ -643,7 +777,20 @@ class alignas(64) Engine {
     mat4 camera_view() const;
     mat4 camera_projection() const;
     std::pair<unsigned int, unsigned int> viewport_dims() const;
+    void close_window() const;
+    bool is_pressed(Key) const;
+    bool is_pressed(MouseButton) const;
+    bool just_pressed(Key) const;
+    bool just_pressed(MouseButton) const;
+    bool just_released(Key) const;
+    bool just_released(MouseButton) const;
+    vec2 mouse_pos() const;
+    std::tuple<vec3, vec3, vec3> camera_basis() const;
+    void capture_cursor() const;
+    void release_cursor() const;
 
+    void translate_camera(const vec3&);
+    void rotate_camera(float, float);
     void run(std::function<void(double)> code = [](double){});
 
     RID create_uniform_buffer(unsigned int);
@@ -652,7 +799,7 @@ class alignas(64) Engine {
 
     template <typename T>
     inline std::vector<T> read_buffer(const RID& rid) const {
-      auto [size, data] = read_buffer_raw(rid);
+      auto [size, data] = readBufferRaw(rid);
       if (size == 0) return {};
 
       std::vector<T> out(static_cast<T *>(data), static_cast<T *>(data) + (size / sizeof(T)));
@@ -663,7 +810,7 @@ class alignas(64) Engine {
 
     template <typename T>
     inline T read_buffer(const RID& rid, const T& error) const {
-      auto [size, data] = read_buffer_raw(rid);
+      auto [size, data] = readBufferRaw(rid);
       if (size == 0) return error;
 
       T out = *static_cast<T *>(data);
@@ -674,12 +821,12 @@ class alignas(64) Engine {
 
     template <typename T>
     inline void write_buffer(const RID& rid, const std::vector<T>& data) const {
-      write_buffer_raw(rid, sizeof(T) * data.size(), data.data());
+      writeBufferRaw(rid, sizeof(T) * data.size(), data.data());
     }
 
     template <typename T>
     inline void write_buffer(const RID& rid, const T& data) const {
-      write_buffer_raw(rid, sizeof(T), &data);
+      writeBufferRaw(rid, sizeof(T), &data);
     }
 
     RID create_sampler(const SamplerSettings&);
@@ -711,8 +858,8 @@ class alignas(64) Engine {
 
   private:
     void updateTimes();
-    std::pair<unsigned int, void *> read_buffer_raw(const RID&) const;
-    void write_buffer_raw(const RID&, std::size_t, const void *) const;
+    std::pair<unsigned int, void *> readBufferRaw(const RID&) const;
+    void writeBufferRaw(const RID&, std::size_t, const void *) const;
     void transitionImagesCompute() const;
     void transitionImagesGraphics(const vk::CommandBuffer&) const;
 };

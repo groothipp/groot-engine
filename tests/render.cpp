@@ -122,11 +122,62 @@ TEST_CASE( "render", "[render]" ) {
   engine.write_buffer(cube_buffer, transform_buffer);
   engine.write_buffer(plane_buffer, plane_transform_buffer);
 
-  engine.run([&engine, &cube_buffer, &transform_buffer, &transform](double dt) {
+  double velocity = 0.25;
+  double sensitivity = 0.005;
+  vec2 lastCursorPos;
+  vec2 cursorPos;
+  double inputTimer = 0.0;
+
+  engine.run([
+    &engine, &cube_buffer, &transform_buffer, &transform, &inputTimer,
+    &velocity, &sensitivity, &lastCursorPos, &cursorPos, &plane_transform_buffer, &plane_buffer
+  ](double dt) {
+    inputTimer += dt;
+    if (inputTimer > 0.005) {
+      inputTimer = 0.0;
+
+      if (engine.just_pressed(Key::Escape))
+        engine.close_window();
+
+      if (engine.just_pressed(Key::LeftAlt))
+        engine.release_cursor();
+      if (engine.just_released(Key::LeftAlt))
+        engine.capture_cursor();
+
+      vec3 dir = vec3(0.0f);
+      if (engine.is_pressed(Key::W)) dir.z += 1.0f;
+      if (engine.is_pressed(Key::A)) dir.x -= 1.0f;
+      if (engine.is_pressed(Key::S)) dir.z -= 1.0f;
+      if (engine.is_pressed(Key::D)) dir.x += 1.0f;
+      if (engine.is_pressed(Key::Space)) dir.y += 1.0f;
+      if (engine.is_pressed(Key::LeftShift)) dir.y -= 1.0f;
+
+      if (dir.mag() > 1e-6) {
+        auto [forward, right, up] = engine.camera_basis();
+        dir = (dir.z * forward + dir.x * right + dir.y * up).normalized();
+        engine.translate_camera(velocity * dt * dir);
+      }
+
+      if (engine.is_pressed(MouseButton::Left)) {
+        cursorPos = engine.mouse_pos();
+        vec2 delta = cursorPos - lastCursorPos;
+
+        float pitch = -delta.y * sensitivity;
+        float yaw = -delta.x * sensitivity;
+
+        engine.rotate_camera(pitch, yaw);
+      }
+    }
+    lastCursorPos = engine.mouse_pos();
+
     transform.rotation.y += radians(5.0f) * dt;
     transform_buffer.model = transform.matrix();
     transform_buffer.norm = transform.matrix().inverse().transpose();
+    transform_buffer.view = engine.camera_view();
 
     engine.write_buffer(cube_buffer, transform_buffer);
+
+    plane_transform_buffer.view = engine.camera_view();
+    engine.write_buffer(plane_buffer, plane_transform_buffer);
   });
 }

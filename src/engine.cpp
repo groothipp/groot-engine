@@ -1,5 +1,6 @@
 #include "src/include/allocator.hpp"
 #include "src/include/engine.hpp"
+#include "src/include/input_mananger.hpp"
 #include "src/include/object.hpp"
 #include "src/include/renderer.hpp"
 #include "src/include/shader_compiler.hpp"
@@ -44,9 +45,12 @@ Engine::Engine(const Settings& settings) : m_settings(settings) {
   m_compiler = new ShaderCompiler();
   m_renderer = new Renderer(m_window, m_context, m_allocator, m_settings);
 
-  auto [w, h] = m_renderer->extent();
-  float ar = static_cast<float>(w) / static_cast<float>(h);
-  m_cameraProjection = mat4::perspective_projection(radians(m_settings.fov), ar, 0.1f, 1000.0f);
+  m_inputManager = new InputManager;
+  glfwSetWindowUserPointer(m_window, m_inputManager);
+  glfwSetKeyCallback(m_window, InputManager::keyCallback);
+  glfwSetCursorPosCallback(m_window, InputManager::cursorCallback);
+  glfwSetMouseButtonCallback(m_window, InputManager::mouseCallback);
+  glfwSetInputMode(m_window, GLFW_CURSOR, GLFW_CURSOR_CAPTURED);
 }
 
 Engine::~Engine() {
@@ -111,26 +115,99 @@ Engine::~Engine() {
 
   delete m_allocator;
   delete m_context;
+  delete m_inputManager;
 
   glfwDestroyWindow(m_window);
   glfwTerminate();
 }
 
 mat4 Engine::camera_view() const {
-  return m_cameraView;
+  return mat4::view(m_cameraEye, m_cameraTarget, vec3(0.0f, 1.0f, 0.0f));
 }
 
 mat4 Engine::camera_projection() const {
-  return m_cameraProjection;
+  auto [w, h] = m_renderer->extent();
+  float ar = static_cast<float>(w) / static_cast<float>(h);
+  return mat4::perspective_projection(radians(m_settings.fov), ar, 0.1f, 1000.0f);
 }
 
 std::pair<unsigned int, unsigned int> Engine::viewport_dims() const {
   return m_renderer->extent();
 }
 
+void Engine::close_window() const {
+  glfwSetWindowShouldClose(m_window, true);
+}
+
+bool Engine::is_pressed(Key key) const {
+  return m_inputManager->pressed(key);
+}
+
+bool Engine::is_pressed(MouseButton button) const {
+  return m_inputManager->pressed(button);
+}
+
+bool Engine::just_pressed(Key key) const {
+  return m_inputManager->just_pressed(key);
+}
+
+bool Engine::just_pressed(MouseButton button) const {
+  return m_inputManager->just_pressed(button);
+}
+
+bool Engine::just_released(Key key) const {
+  return m_inputManager->just_released(key);
+}
+
+bool Engine::just_released(MouseButton button) const {
+  return m_inputManager->just_released(button);
+}
+
+vec2 Engine::mouse_pos() const {
+  auto [x, y] = m_inputManager->cursor();
+  return vec2(x, y);
+}
+
+std::tuple<vec3, vec3, vec3> Engine::camera_basis() const {
+  vec3 forward = (m_cameraTarget - m_cameraEye).normalized();
+  vec3 right = forward.cross(vec3(0.0f, 1.0f, 0.0f)).normalized();
+  return { forward, right, vec3(0.0f, 1.0f, 0.0f) };
+}
+
+void Engine::capture_cursor() const {
+ if (glfwGetInputMode(m_window, GLFW_CURSOR) != GLFW_CURSOR_CAPTURED)
+   glfwSetInputMode(m_window, GLFW_CURSOR, GLFW_CURSOR_CAPTURED);
+}
+
+void Engine::release_cursor() const {
+  if (glfwGetInputMode(m_window, GLFW_CURSOR) != GLFW_CURSOR_NORMAL)
+    glfwSetInputMode(m_window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+}
+
+void Engine::translate_camera(const vec3& delta) {
+  m_cameraEye = m_cameraEye + delta;
+  m_cameraTarget = m_cameraTarget + delta;
+}
+
+void Engine::rotate_camera(float pitch, float yaw) {
+  vec3 dir = m_cameraTarget - m_cameraEye;
+  float dist = dir.mag();
+  dir = dir.normalized();
+  vec3 right = dir.cross(vec3(0.0f, 1.0f, 0.0f)).normalized();
+
+  dir = mat3::rotation_y(yaw) * dir;
+  dir = mat3::rotation(right, pitch) * dir;
+
+  if (std::abs(dir.dot(vec3(0.0f, 1.0f, 0.0f))) > 0.99f)
+    dir = (m_cameraTarget - m_cameraEye).normalized();
+
+  m_cameraTarget = m_cameraEye + dist * dir;
+}
+
 void Engine::run(std::function<void(double)> code) {
   while (!glfwWindowShouldClose(m_window)) {
     updateTimes();
+    m_inputManager->reset();
     glfwPollEvents();
 
     unsigned int imgIndex = m_renderer->prepFrame(m_context->device());
@@ -1439,7 +1516,7 @@ void Engine::updateTimes() {
   m_accumulator += m_frameTime;
 }
 
-std::pair<unsigned int, void *> Engine::read_buffer_raw(const RID& rid) const {
+std::pair<unsigned int, void *> Engine::readBufferRaw(const RID& rid) const {
   if (!rid.is_valid()) {
     Log::warn("tried to read from invalid buffer RID");
     return std::make_pair(0, nullptr);
@@ -1462,7 +1539,7 @@ std::pair<unsigned int, void *> Engine::read_buffer_raw(const RID& rid) const {
   return std::make_pair(size, data);
 }
 
-void Engine::write_buffer_raw(const RID& rid, std::size_t size, const void * data) const {
+void Engine::writeBufferRaw(const RID& rid, std::size_t size, const void * data) const {
   if (!rid.is_valid()) {
     Log::warn("tried to write to invalid buffer RID");
     return;

@@ -16,10 +16,11 @@ class GLFWwindow;
 namespace groot {
 
 class Allocator;
-class VulkanContext;
-class ShaderCompiler;
-class Renderer;
+class InputManager;
 class Object;
+class Renderer;
+class ShaderCompiler;
+class VulkanContext;
 
 class alignas(64) Engine {
   Settings m_settings;
@@ -28,6 +29,7 @@ class alignas(64) Engine {
   Allocator * m_allocator = nullptr;
   ShaderCompiler * m_compiler = nullptr;
   Renderer * m_renderer = nullptr;
+  InputManager * m_inputManager = nullptr;
 
   unsigned long m_nextRID = 0;
   std::unordered_map<RID, unsigned long, RID::Hash> m_resources;
@@ -37,8 +39,8 @@ class alignas(64) Engine {
   std::queue<ComputeCommand> m_computeCmds;
 
   std::set<Object> m_scene;
-  mat4 m_cameraView = mat4::view(vec3(0.0f, 0.0f, 2.0f), vec3(0.0f), vec3(0.0f, 1.0f, 0.0f));
-  mat4 m_cameraProjection = mat4::identity();
+  vec3 m_cameraEye = vec3(0.0f, 0.0f, 2.0f);
+  vec3 m_cameraTarget = vec3(0.0f);
 
   double m_frameTime = 0.0;
   double m_time = 0.0;
@@ -57,7 +59,20 @@ class alignas(64) Engine {
     mat4 camera_view() const;
     mat4 camera_projection() const;
     std::pair<unsigned int, unsigned int> viewport_dims() const;
+    void close_window() const;
+    bool is_pressed(Key) const;
+    bool is_pressed(MouseButton) const;
+    bool just_pressed(Key) const;
+    bool just_pressed(MouseButton) const;
+    bool just_released(Key) const;
+    bool just_released(MouseButton) const;
+    vec2 mouse_pos() const;
+    std::tuple<vec3, vec3, vec3> camera_basis() const;
+    void capture_cursor() const;
+    void release_cursor() const;
 
+    void translate_camera(const vec3&);
+    void rotate_camera(float, float);
     void run(std::function<void(double)> code = [](double){});
 
     RID create_uniform_buffer(unsigned int);
@@ -66,7 +81,7 @@ class alignas(64) Engine {
 
     template <typename T>
     inline std::vector<T> read_buffer(const RID& rid) const {
-      auto [size, data] = read_buffer_raw(rid);
+      auto [size, data] = readBufferRaw(rid);
       if (size == 0) return {};
 
       std::vector<T> out(static_cast<T *>(data), static_cast<T *>(data) + (size / sizeof(T)));
@@ -77,7 +92,7 @@ class alignas(64) Engine {
 
     template <typename T>
     inline T read_buffer(const RID& rid, const T& error) const {
-      auto [size, data] = read_buffer_raw(rid);
+      auto [size, data] = readBufferRaw(rid);
       if (size == 0) return error;
 
       T out = *static_cast<T *>(data);
@@ -88,12 +103,12 @@ class alignas(64) Engine {
 
     template <typename T>
     inline void write_buffer(const RID& rid, const std::vector<T>& data) const {
-      write_buffer_raw(rid, sizeof(T) * data.size(), data.data());
+      writeBufferRaw(rid, sizeof(T) * data.size(), data.data());
     }
 
     template <typename T>
     inline void write_buffer(const RID& rid, const T& data) const {
-      write_buffer_raw(rid, sizeof(T), &data);
+      writeBufferRaw(rid, sizeof(T), &data);
     }
 
     RID create_sampler(const SamplerSettings&);
@@ -125,8 +140,8 @@ class alignas(64) Engine {
 
   private:
     void updateTimes();
-    std::pair<unsigned int, void *> read_buffer_raw(const RID&) const;
-    void write_buffer_raw(const RID&, std::size_t, const void *) const;
+    std::pair<unsigned int, void *> readBufferRaw(const RID&) const;
+    void writeBufferRaw(const RID&, std::size_t, const void *) const;
     void transitionImagesCompute() const;
     void transitionImagesGraphics(const vk::CommandBuffer&) const;
 };
