@@ -13,12 +13,9 @@ layout(location = 2) in vec3 _VertexNormal;
 
 layout(location = 0) out vec2 _UV;
 layout(location = 1) out vec3 _Normal;
-layout(location = 2) out vec3 _WorldPos;
 
 void main() {
-  vec4 worldPos = _Model * vec4(_VertexPosition, 1.0f);
-  gl_Position = _Proj * _View * worldPos;
+  gl_Position = _Proj * _View * _Model * vec4(_VertexPosition, 1.0f);
   _UV = _VertexUV;
   _Normal = normalize(mat3(_Norm) * _VertexNormal);
-  _WorldPos = worldPos.xyz;
 }
