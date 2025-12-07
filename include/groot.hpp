@@ -558,7 +558,8 @@ struct GraphicsPipelineSettings {
   MeshType mesh_type = MeshType::Solid;
   CullMode cull_mode = CullMode::Back;
   DrawDirection draw_direction = DrawDirection::CounterClockwise;
-  bool enable_depth = true;
+  bool enable_depth_test = true;
+  bool enable_depth_write = true;
   bool enable_blend = true;
 };
 

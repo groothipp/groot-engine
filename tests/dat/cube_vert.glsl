@@ -11,11 +11,15 @@ layout(location = 0) in vec3 _VertexPosition;
 layout(location = 1) in vec2 _VertexUV;
 layout(location = 2) in vec3 _VertexNormal;
 
-layout(location = 0) out vec2 _UV;
-layout(location = 1) out vec3 _Normal;
+layout(location = 0) out vec3 _Normal;
+layout(location = 1) out vec3 _WorldPos;
+layout(location = 2) out vec3 _ViewDir;
 
 void main() {
-  gl_Position = _Proj * _View * _Model * vec4(_VertexPosition, 1.0f);
-  _UV = _VertexUV;
+  vec4 world_pos = _Model * vec4(_VertexPosition, 1.0);
+  gl_Position = _Proj * _View * world_pos;
+
   _Normal = normalize(mat3(_Norm) * _VertexNormal);
+  _WorldPos = world_pos.xyz;
+  _ViewDir = normalize(-(_View * world_pos).xyz);
 }

@@ -12,6 +12,7 @@ class GLFWwindow;
 
 namespace groot {
 
+class Allocator;
 class VulkanContext;
 class Object;
 
@@ -25,6 +26,8 @@ class Renderer {
   vk::SwapchainKHR m_swapchain = nullptr;
   std::vector<vk::Image> m_images;
   std::vector<vk::ImageView> m_views;
+  vk::Image m_depthImage = nullptr;
+  vk::ImageView m_depthView = nullptr;
 
   std::vector<vk::CommandBuffer> m_cmds;
   std::vector<vk::Fence> m_fences;
@@ -35,7 +38,7 @@ class Renderer {
   unsigned int m_frameIndex = 0;
 
   public:
-    Renderer(GLFWwindow *, const VulkanContext *, Settings&);
+    Renderer(GLFWwindow *, const VulkanContext *, Allocator *, Settings&);
     Renderer(const Renderer&) = delete;
     Renderer(Renderer&&) = delete;
 
@@ -48,14 +51,14 @@ class Renderer {
     std::pair<unsigned int, unsigned int> extent() const;
     unsigned int prepFrame(const vk::Device&) const;
     const vk::CommandBuffer& renderBuffer() const;
+
     void render(
       const VulkanContext *,
       const std::set<Object>&,
       const std::unordered_map<RID, unsigned long, RID::Hash>&,
       unsigned int
     );
-
-    void destroy(const VulkanContext *);
+    void destroy(const VulkanContext *, Allocator *);
 
   private:
     vk::SurfaceFormatKHR checkFormat(const VulkanContext *, Settings&) const;

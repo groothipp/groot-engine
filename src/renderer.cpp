@@ -1,8 +1,10 @@
+#include "src/include/allocator.hpp"
 #include "src/include/log.hpp"
 #include "src/include/object.hpp"
 #include "src/include/renderer.hpp"
 #include "src/include/structs.hpp"
 #include "src/include/vulkan_context.hpp"
+#include "vulkan/vulkan.hpp"
 
 #include <GLFW/glfw3.h>
 
@@ -10,7 +12,12 @@
 
 namespace groot {
 
-Renderer::Renderer(GLFWwindow * window, const VulkanContext * context, Settings& settings) {
+Renderer::Renderer(
+  GLFWwindow * window,
+  const VulkanContext * context,
+  Allocator * allocator,
+  Settings& settings
+) {
   m_colorFormat = checkFormat(context, settings);
   m_depthFormat = getDepthFormat(context);
   m_presentMode = checkPresentMode(context, settings);
@@ -44,7 +51,7 @@ Renderer::Renderer(GLFWwindow * window, const VulkanContext * context, Settings&
 
   for (const auto& image : m_images) {
     m_views.emplace_back(context->device().createImageView(vk::ImageViewCreateInfo{
-      .image = image,
+      .image    = image,
       .viewType = vk::ImageViewType::e2D,
       .format   = m_colorFormat.format,
       .subresourceRange = {
@@ -54,6 +61,28 @@ Renderer::Renderer(GLFWwindow * window, const VulkanContext * context, Settings&
       }
     }));
   }
+
+  m_depthImage = allocator->allocateImage(vk::ImageCreateInfo{
+    .imageType    = vk::ImageType::e2D,
+    .format       = m_depthFormat,
+    .extent       = { m_extent.width, m_extent.height, 1 },
+    .mipLevels    = 1,
+    .arrayLayers  = 1,
+    .samples      = vk::SampleCountFlagBits::e1,
+    .tiling       = vk::ImageTiling::eOptimal,
+    .usage        = vk::ImageUsageFlagBits::eDepthStencilAttachment
+  });
+
+  m_depthView = context->device().createImageView(vk::ImageViewCreateInfo{
+    .image    = m_depthImage,
+    .viewType = vk::ImageViewType::e2D,
+    .format   = m_depthFormat,
+    .subresourceRange = {
+      .aspectMask = vk::ImageAspectFlagBits::eDepth,
+      .levelCount = 1,
+      .layerCount = 1
+    }
+  });
 
   m_cmds = context->createRenderBuffers(m_flightFrames);
   m_fences = context->createFlightFences(m_flightFrames);
@@ -126,22 +155,20 @@ void Renderer::render(
       .clearValue   = { m_clearColor }
     };
 
-    // vk::RenderingAttachmentInfo depth{
-    //   .imageView    = m_depthView,
-    //   .imageLayout  = vk::ImageLayout::eDepthAttachmentOptimal,
-    //   .loadOp       = vk::AttachmentLoadOp::eClear,
-    //   .storeOp      = vk::AttachmentStoreOp::eDontCare,
-    //   .clearValue   = { .depthStencil = { 1, 0 } }
-    // };
+    vk::RenderingAttachmentInfo depth{
+      .imageView    = m_depthView,
+      .imageLayout  = vk::ImageLayout::eDepthAttachmentOptimal,
+      .loadOp       = vk::AttachmentLoadOp::eClear,
+      .storeOp      = vk::AttachmentStoreOp::eDontCare,
+      .clearValue   = { .depthStencil = { 1, 0 } }
+    };
 
     m_cmds[m_frameIndex].beginRendering(vk::RenderingInfo{
-      .renderArea = {
-        .extent = m_extent
-      },
+      .renderArea           = { .extent = m_extent },
       .layerCount           = 1,
       .colorAttachmentCount = 1,
       .pColorAttachments    = &color,
-      .pDepthAttachment     = nullptr
+      .pDepthAttachment     = &depth
     });
 
     m_cmds[m_frameIndex].setViewport(0, vk::Viewport{
@@ -214,7 +241,7 @@ void Renderer::render(
   m_frameIndex = (m_frameIndex + 1) % m_flightFrames;
 }
 
-void Renderer::destroy(const VulkanContext * context) {
+void Renderer::destroy(const VulkanContext * context, Allocator * allocator) {
   context->destroyRenderBuffers(m_cmds);
 
   for (const auto& fence : m_fences)
@@ -225,6 +252,9 @@ void Renderer::destroy(const VulkanContext * context) {
 
   for (const auto& semaphore : m_renderSemaphores)
     context->device().destroySemaphore(semaphore);
+
+  context->device().destroyImageView(m_depthView);
+  allocator->destroyImage(m_depthImage);
 
   for (const auto& view : m_views)
     context->device().destroyImageView(view);

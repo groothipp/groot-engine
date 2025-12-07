@@ -42,7 +42,7 @@ Engine::Engine(const Settings& settings) : m_settings(settings) {
 
   m_allocator = new Allocator(m_context, m_context->gpu().getProperties().apiVersion);
   m_compiler = new ShaderCompiler();
-  m_renderer = new Renderer(m_window, m_context, m_settings);
+  m_renderer = new Renderer(m_window, m_context, m_allocator, m_settings);
 
   auto [w, h] = m_renderer->extent();
   float ar = static_cast<float>(w) / static_cast<float>(h);
@@ -106,7 +106,7 @@ Engine::~Engine() {
     }
   }
 
-  m_renderer->destroy(m_context);
+  m_renderer->destroy(m_context, m_allocator);
   delete m_renderer;
 
   delete m_allocator;
@@ -1053,8 +1053,8 @@ RID Engine::create_graphics_pipeline(const GraphicsPipelineShaders& shaders, con
   };
 
   vk::PipelineDepthStencilStateCreateInfo depthCreateInfo{
-    .depthTestEnable        = s.enable_depth,
-    .depthWriteEnable       = s.enable_depth,
+    .depthTestEnable        = s.enable_depth_test,
+    .depthWriteEnable       = s.enable_depth_write,
     .depthCompareOp         = vk::CompareOp::eLess,
     .depthBoundsTestEnable  = false,
     .stencilTestEnable      = false
@@ -1261,7 +1261,6 @@ RID Engine::load_mesh(const std::string& path) {
     .size   = sizeof(Vertex) * vertices.size(),
     .usage  = vk::BufferUsageFlagBits::eTransferSrc
   });
-  Log::generic("created vertex staging buffer");
 
   void * map = m_allocator->mapBuffer(vertexStaging);
   std::memcpy(map, vertices.data(), sizeof(Vertex) * vertices.size());
@@ -1271,7 +1270,6 @@ RID Engine::load_mesh(const std::string& path) {
     .size   = sizeof(unsigned int) * indices.size(),
     .usage  = vk::BufferUsageFlagBits::eTransferSrc
   });
-  Log::generic("created index staging buffer");
 
   map = m_allocator->mapBuffer(indexStaging);
   std::memcpy(map, indices.data(), sizeof(unsigned int) * indices.size());
@@ -1281,13 +1279,11 @@ RID Engine::load_mesh(const std::string& path) {
     .size   = sizeof(Vertex) * vertices.size(),
     .usage  = vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst
   }, VMA_MEMORY_USAGE_GPU_ONLY, 0);
-  Log::generic("created vertex buffer");
 
   vk::Buffer indexBuffer = m_allocator->allocateBuffer(vk::BufferCreateInfo{
     .size   = sizeof(unsigned int) * indices.size(),
     .usage  = vk::BufferUsageFlagBits::eIndexBuffer | vk::BufferUsageFlagBits::eTransferDst
   }, VMA_MEMORY_USAGE_GPU_ONLY, 0);
-  Log::generic("created index buffer");
 
   vk::CommandBuffer cmdBuf = m_context->beginTransfer();
 

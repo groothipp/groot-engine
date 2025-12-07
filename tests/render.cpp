@@ -17,71 +17,116 @@ TEST_CASE( "render", "[render]" ) {
     .window_title     = "Groot Engine Render Test",
   });
 
-  RID vert = engine.compile_shader(ShaderType::Vertex, std::format("{}/dat/render_vert.glsl", GROOT_TEST_DIR));
-  RID frag = engine.compile_shader(ShaderType::Fragment, std::format("{}/dat/render_frag.glsl", GROOT_TEST_DIR));
-  RID comp = engine.compile_shader(ShaderType::Compute, std::format("{}/dat/render_comp.glsl", GROOT_TEST_DIR));
-  REQUIRE( vert.is_valid() );
-  REQUIRE( frag.is_valid() );
-  REQUIRE( comp.is_valid() );
+  RID cube_vert = engine.compile_shader(ShaderType::Vertex, std::format("{}/dat/cube_vert.glsl", GROOT_TEST_DIR));
+  RID cube_frag = engine.compile_shader(ShaderType::Fragment, std::format("{}/dat/cube_frag.glsl", GROOT_TEST_DIR));
+  RID plane_vert = engine.compile_shader(ShaderType::Vertex, std::format("{}/dat/plane_vert.glsl", GROOT_TEST_DIR));
+  RID plane_frag = engine.compile_shader(ShaderType::Fragment, std::format("{}/dat/plane_frag.glsl", GROOT_TEST_DIR));
+  REQUIRE( cube_vert.is_valid() );
+  REQUIRE( cube_frag.is_valid() );
+  REQUIRE( plane_vert.is_valid() );
+  REQUIRE( plane_frag.is_valid() );
 
   RID sampler = engine.create_sampler(SamplerSettings{
     .anisotropic_filtering = false
   });
   REQUIRE( sampler.is_valid() );
 
-  RID texture = engine.create_storage_texture(256, 256, sampler, Format::rgba8_unorm);
-  REQUIRE( texture.is_valid() );
+  RID cloud_texture = engine.create_texture(std::format("{}/dat/test.png", GROOT_TEST_DIR), sampler);
+  REQUIRE( cloud_texture.is_valid() );
 
-  RID buffer = engine.create_storage_buffer(sizeof(TransformBuffer));
-  REQUIRE( buffer.is_valid() );
+  RID cube_buffer = engine.create_storage_buffer(sizeof(TransformBuffer));
+  REQUIRE( cube_buffer.is_valid() );
 
-  RID set = engine.create_descriptor_set({ buffer, texture });
-  REQUIRE( set.is_valid() );
+  RID plane_buffer = engine.create_storage_buffer(sizeof(TransformBuffer));
+  REQUIRE( plane_buffer.is_valid() );
 
-  RID compute_pipeline = engine.create_compute_pipeline(comp, set);
-  RID graphics_pipeline = engine.create_graphics_pipeline(GraphicsPipelineShaders{
-    .vertex   = vert,
-    .fragment = frag
-  }, set, GraphicsPipelineSettings{
-    .draw_direction = DrawDirection::Clockwise,
-    .enable_depth = false,
-    .enable_blend = true
+  RID cube_set = engine.create_descriptor_set({ cube_buffer });
+  REQUIRE( cube_set.is_valid() );
+
+  RID plane_set = engine.create_descriptor_set({ plane_buffer, cloud_texture });
+  REQUIRE( plane_set.is_valid() );
+
+  RID cube_pipeline_back = engine.create_graphics_pipeline(GraphicsPipelineShaders{
+    .vertex   = cube_vert,
+    .fragment = cube_frag
+  }, cube_set, GraphicsPipelineSettings{
+    .cull_mode = CullMode::Front,
+    .enable_depth_write = false
   });
-  REQUIRE( compute_pipeline.is_valid() );
-  REQUIRE( graphics_pipeline.is_valid() );
 
-  RID mesh = engine.load_mesh(std::format("{}/dat/cube.obj", GROOT_TEST_DIR));
-  REQUIRE( mesh.is_valid() );
+  RID cube_pipeline_front = engine.create_graphics_pipeline(GraphicsPipelineShaders{
+    .vertex   = cube_vert,
+    .fragment = cube_frag
+  }, cube_set, GraphicsPipelineSettings{
+    .cull_mode          = CullMode::Back,
+    .enable_depth_write = false
+  });
 
-  Object cube;
-  cube.set_mesh(mesh);
-  cube.set_pipeline(graphics_pipeline);
-  cube.set_descriptor_set(set);
+  RID plane_pipeline = engine.create_graphics_pipeline(GraphicsPipelineShaders{
+    .vertex = plane_vert,
+    .fragment = plane_frag
+  }, plane_set, GraphicsPipelineSettings{
+    .cull_mode = CullMode::None
+  });
 
-  engine.add_to_scene(cube);
+  REQUIRE( cube_pipeline_back.is_valid() );
+  REQUIRE( cube_pipeline_front.is_valid() );
+  REQUIRE( plane_pipeline.is_valid() );
+
+  RID cube_mesh = engine.load_mesh(std::format("{}/dat/cube.obj", GROOT_TEST_DIR));
+  REQUIRE( cube_mesh.is_valid() );
+
+  RID plane_mesh = engine.load_mesh(std::format("{}/dat/plane.obj", GROOT_TEST_DIR));
+  REQUIRE( plane_mesh.is_valid() );
+
+  Object cube_back;
+  cube_back.set_mesh(cube_mesh);
+  cube_back.set_pipeline(cube_pipeline_back);
+  cube_back.set_descriptor_set(cube_set);
+
+  Object cube_front;
+  cube_front.set_mesh(cube_mesh);
+  cube_front.set_pipeline(cube_pipeline_front);
+  cube_front.set_descriptor_set(cube_set);
+
+  Object plane;
+  plane.set_descriptor_set(plane_set);
+  plane.set_mesh(plane_mesh);
+  plane.set_pipeline(plane_pipeline);
+
+  engine.add_to_scene(cube_back);
+  engine.add_to_scene(cube_front);
+  engine.add_to_scene(plane);
 
   Transform transform;
   TransformBuffer transform_buffer{
-    .model = transform.matrix(),
-    .view = engine.camera_view(),
-    .proj = engine.camera_projection(),
-    .norm = transform.matrix().inverse().transpose()
+    .model  = transform.matrix(),
+    .view   = engine.camera_view(),
+    .proj   = engine.camera_projection(),
+    .norm   = transform.matrix().inverse().transpose()
   };
 
-  engine.write_buffer(buffer, transform_buffer);
+  auto [width, height] = engine.viewport_dims();
 
-  engine.run([&engine, &compute_pipeline, &set, &buffer, &transform_buffer, &transform](double dt) {
-    engine.compute_command(ComputeCommand{
-      .pipeline       = compute_pipeline,
-      .descriptor_set = set,
-      .work_groups    = { 32, 32, 1 }
-    });
-    engine.dispatch();
+  Transform plane_transform{
+    .position = vec3(0.0, 0.0, -2.0),
+    .scale    = vec3(5.0, 2.8, 1.0)
+  };
+  TransformBuffer plane_transform_buffer{
+    .model  = plane_transform.matrix(),
+    .view   = engine.camera_view(),
+    .proj   = engine.camera_projection(),
+    .norm   = mat4::identity()
+  };
 
+  engine.write_buffer(cube_buffer, transform_buffer);
+  engine.write_buffer(plane_buffer, plane_transform_buffer);
+
+  engine.run([&engine, &cube_buffer, &transform_buffer, &transform](double dt) {
     transform.rotation.y += radians(5.0f) * dt;
     transform_buffer.model = transform.matrix();
     transform_buffer.norm = transform.matrix().inverse().transpose();
 
-    engine.write_buffer(buffer, transform_buffer);
+    engine.write_buffer(cube_buffer, transform_buffer);
   });
 }
