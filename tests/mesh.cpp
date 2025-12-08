@@ -1,4 +1,4 @@
-#include "include/groot.hpp"
+#include "include/groot/groot.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 

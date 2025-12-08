@@ -43,6 +43,17 @@ set(ENGINE_SOURCES
   ${CMAKE_CURRENT_SOURCE_DIR}/vulkan_context.cpp
 )
 
+set(PUBLIC_HEADERS
+  ${CMAKE_SOURCE_DIR}/include/groot/engine.hpp
+  ${CMAKE_SOURCE_DIR}/include/groot/enums.hpp
+  ${CMAKE_SOURCE_DIR}/include/groot/groot.hpp
+  ${CMAKE_SOURCE_DIR}/include/groot/linalg.hpp
+  ${CMAKE_SOURCE_DIR}/include/groot/log.hpp
+  ${CMAKE_SOURCE_DIR}/include/groot/object.hpp
+  ${CMAKE_SOURCE_DIR}/include/groot/rid.hpp
+  ${CMAKE_SOURCE_DIR}/include/groot/structs.hpp
+)
+
 set_source_files_properties(
   ${CMAKE_CURRENT_SOURCE_DIR}/vma.cpp
   PROPERTIES COMPILE_FLAGS "-Wno-nullability-completeness"
@@ -68,4 +79,14 @@ target_link_libraries(groot PRIVATE
   ${SPIRV_LIB}
   ${SPIRV_TOOLS_LIB}
   ${SPIRV_TOOLS_OPT_LIB}
+)
+
+install(TARGETS groot
+  EXPORT GrootEngineTargets
+  LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+  ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+)
+
+install(FILES ${PUBLIC_HEADERS}
+  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/groot
 )

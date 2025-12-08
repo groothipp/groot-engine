@@ -5,7 +5,7 @@ find_package(Catch2 3 REQUIRED)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 
 set(TESTS_SOURCES
-  ${CMAKE_SOURCE_DIR}/include/groot.hpp
+  ${CMAKE_SOURCE_DIR}/include/groot/groot.hpp
   ${CMAKE_CURRENT_SOURCE_DIR}/buffers.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/descriptor_sets.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/dispatch.cpp
