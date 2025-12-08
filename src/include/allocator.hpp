@@ -1,83 +1,39 @@
 #pragma once
 
-#include "src/include/vkcontext.hpp"
+#include "src/include/structs.hpp"
 
-#include <vulkan/vulkan_raii.hpp>
-#include <vulkan/vulkan_beta.h>
+#include <vulkan/vulkan.hpp>
+#include <vk_mem_alloc.h>
 
-#include <map>
-#include <tuple>
-#include <vector>
+#include <unordered_map>
 
-namespace ge {
+namespace groot {
+
+class VulkanContext;
 
 class Allocator {
-  using BufferOutput = std::tuple<
-    vk::raii::DeviceMemory,
-    std::vector<vk::raii::Buffer>,
-    std::vector<unsigned int>,
-    unsigned int
-  >;
-
-  using CommandOutput = std::map<QueueFamilyType, vk::raii::CommandPool>;
-
-  using DepthOutput = std::tuple<
-    vk::raii::DeviceMemory,
-    vk::raii::Image,
-    vk::raii::ImageView
-  >;
-
-  using FenceOutput = std::vector<vk::raii::Fence>;
-  using SemaphoreOutput = std::vector<vk::raii::Semaphore>;
-
-  using DescriptorOutput = std::pair<
-    vk::raii::DescriptorPool,
-    vk::raii::DescriptorSets
-  >;
-
-  using ImageOutput = std::tuple<
-    vk::raii::DeviceMemory,
-    std::vector<vk::raii::Image>,
-    std::vector<vk::raii::ImageView>,
-    std::vector<unsigned int>,
-    unsigned int
-  >;
-
-  using SamplerOutput = vk::raii::Sampler;
+  VmaAllocator m_allocator = nullptr;
+  std::unordered_map<VkBuffer, VmaAllocation, VkBufferHash> m_buffers;
+  std::unordered_map<VkImage, VmaAllocation, VkImageHash> m_images;
 
   public:
-    Allocator() = delete;
-    Allocator(Allocator&) = delete;
+    explicit Allocator(const VulkanContext *, unsigned int);
+    Allocator(const Allocator&) = delete;
     Allocator(Allocator&&) = delete;
 
-    ~Allocator() = default;
+    ~Allocator();
 
-    Allocator& operator=(Allocator&) = delete;
+    Allocator& operator=(const Allocator&) = delete;
     Allocator& operator=(Allocator&&) = delete;
 
-    static BufferOutput bufferPool(const Engine&, const std::vector<vk::BufferCreateInfo>&, vk::MemoryPropertyFlags);
-    static CommandOutput commandPools(const Engine&);
-    static DepthOutput depthResources(const Engine&);
-    static FenceOutput fences(const Engine&, unsigned int, bool signaled = false);
-    static SemaphoreOutput semaphores(const Engine&, unsigned int);
-    static DescriptorOutput descriptorPool(const Engine&, const vk::raii::DescriptorSetLayout&,
-      unsigned int storageCount,
-      unsigned int imageCount,
-      unsigned int samplerCount
-    );
-    static ImageOutput imagePool(const Engine&, const std::vector<std::pair<unsigned int, unsigned int>>&,
-      const vk::ImageUsageFlags&,
-      const vk::Format&
-    );
-    static SamplerOutput sampler(const Engine&);
+    vk::Buffer allocateBuffer(const vk::BufferCreateInfo&, VmaMemoryUsage memoryusage = VMA_MEMORY_USAGE_AUTO, VmaAllocationCreateFlags flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT);
+    void * mapBuffer(const vk::Buffer&);
+    void unmapBuffer(const vk::Buffer&);
+    void destroyBuffer(const vk::Buffer&);
+    unsigned int bufferSize(const vk::Buffer&) const;
 
-  private:
-    static vk::raii::DeviceMemory allocate(
-      const Engine&,
-      const unsigned int&,
-      const unsigned int&,
-      const vk::MemoryPropertyFlags&
-    );
+    vk::Image allocateImage(const vk::ImageCreateInfo&, VmaMemoryUsage memoryUsage = VMA_MEMORY_USAGE_AUTO);
+    void destroyImage(const vk::Image&);
 };
 
-} // namespace ge
+} // namespace groot

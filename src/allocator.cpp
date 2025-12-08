@@ -1,252 +1,114 @@
 #include "src/include/allocator.hpp"
-#include "src/include/engine.hpp"
-#include "vulkan/vulkan_enums.hpp"
-#include "vulkan/vulkan_raii.hpp"
+#include "src/include/log.hpp"
+#include "src/include/vulkan_context.hpp"
 
-namespace ge {
+namespace groot {
 
-Allocator::BufferOutput Allocator::bufferPool(
-  const Engine& engine,
-  const std::vector<vk::BufferCreateInfo>& infos,
-  vk::MemoryPropertyFlags flags
-) {
-  vk::raii::DeviceMemory memory = nullptr;
-  std::vector<vk::raii::Buffer> buffers;
-  std::vector<unsigned int> offsets;
-  unsigned int allocationSize = 0;
-  unsigned int filter = ~(0x0);
+Allocator::Allocator(const VulkanContext * context, unsigned int apiVersion) {
+  VmaAllocatorCreateInfo createInfo{
+    .physicalDevice   = context->gpu(),
+    .device           = context->device(),
+    .instance         = context->instance(),
+    .vulkanApiVersion = apiVersion
+  };
 
-  for (const auto& info : infos) {
-    buffers.emplace_back(engine.m_context.device().createBuffer(info));
-    vk::MemoryRequirements requirements = buffers.back().getMemoryRequirements();
-
-    while (allocationSize % requirements.alignment != 0) ++allocationSize;
-    offsets.emplace_back(allocationSize);
-
-    filter &= requirements.memoryTypeBits;
-    allocationSize += requirements.size;
-  }
-
-  memory = allocate(engine, allocationSize, filter, flags);
-
-  for (unsigned int i = 0; i < buffers.size(); ++i)
-    buffers[i].bindMemory(memory, offsets[i]);
-
-  return { std::move(memory), std::move(buffers), std::move(offsets), std::move(allocationSize) };
+  if (vmaCreateAllocator(&createInfo, &m_allocator) != VK_SUCCESS)
+    Log::runtime_error("failed to create allocator");
 }
 
-Allocator::DepthOutput Allocator::depthResources(const Engine & engine) {
-  vk::FormatProperties properties = engine.m_context.gpu().getFormatProperties(engine.m_settings.depth_format);
-  if (!(properties.optimalTilingFeatures & vk::FormatFeatureFlagBits::eDepthStencilAttachment))
-    throw std::runtime_error("groot-engine: invalid depth format");
+Allocator::~Allocator() {
+  for (auto [buffer, allocation] : m_buffers)
+    vmaDestroyBuffer(m_allocator, buffer, allocation);
 
-  vk::raii::DeviceMemory memory = nullptr;
-  vk::raii::Image image = nullptr;
-  vk::raii::ImageView view = nullptr;
+  for (auto [image, allocation] : m_images)
+    vmaDestroyImage(m_allocator, image, allocation);
 
-  image = engine.m_context.device().createImage(vk::ImageCreateInfo{
-    .imageType  = vk::ImageType::e2D,
-    .format     = engine.m_settings.depth_format,
-    .extent     = {
-      .width  = engine.m_settings.extent.width,
-      .height = engine.m_settings.extent.height,
-      .depth  = 1
-    },
-    .mipLevels    = 1,
-    .arrayLayers  = 1,
-    .samples      = vk::SampleCountFlagBits::e1,
-    .tiling       = vk::ImageTiling::eOptimal,
-    .usage        = vk::ImageUsageFlagBits::eDepthStencilAttachment,
-    .sharingMode  = vk::SharingMode::eExclusive
-  });
-
-  vk::MemoryRequirements requirements = image.getMemoryRequirements();
-  unsigned int allocationSize = requirements.size;
-  unsigned int filter = requirements.memoryTypeBits;
-
-  memory = allocate(engine, allocationSize, filter, vk::MemoryPropertyFlagBits::eDeviceLocal);
-  image.bindMemory(memory, 0);
-
-  view = engine.m_context.device().createImageView(vk::ImageViewCreateInfo{
-    .image            = image,
-    .viewType         = vk::ImageViewType::e2D,
-    .format           = engine.m_settings.depth_format,
-    .subresourceRange = {
-      .aspectMask = vk::ImageAspectFlagBits::eDepth,
-      .levelCount = 1,
-      .layerCount = 1
-    }
-  });
-
-  return { std::move(memory), std::move(image), std::move(view) };
+  if (m_allocator)
+    vmaDestroyAllocator(m_allocator);
 }
 
-Allocator::FenceOutput Allocator::fences(const Engine& engine, unsigned int count, bool signaled) {
-  std::vector<vk::raii::Fence> fences;
+vk::Buffer Allocator::allocateBuffer(const vk::BufferCreateInfo& bufferCreateInfo, VmaMemoryUsage usage, VmaAllocationCreateFlags flags) {
+  VmaAllocationCreateInfo allocationCreateInfo{
+    .flags = flags,
+    .usage = usage
+  };
 
-  for (unsigned int i = 0; i < count; ++i) {
-    fences.emplace_back(engine.m_context.device().createFence(vk::FenceCreateInfo{
-      .flags = signaled ? vk::FenceCreateFlagBits::eSignaled : vk::FenceCreateFlags()
-    }));
-  }
+  VkBuffer buffer = nullptr;
+  VmaAllocation allocation = nullptr;
+  vk::Result res = vk::Result(vmaCreateBuffer(
+    m_allocator,
+    reinterpret_cast<const VkBufferCreateInfo *>(&bufferCreateInfo),
+    &allocationCreateInfo,
+    &buffer,
+    &allocation,
+    nullptr
+  ));
 
-  return std::move(fences);
+  if (res != vk::Result::eSuccess)
+    Log::runtime_error(std::format("failed to create buffer: {}", vk::to_string(res)));
+
+  m_buffers[buffer] = allocation;
+  return buffer;
 }
 
-Allocator::SemaphoreOutput Allocator::semaphores(const Engine& engine, unsigned int count) {
-  std::vector<vk::raii::Semaphore> semaphores;
+void * Allocator::mapBuffer(const vk::Buffer& buffer) {
+  VmaAllocation alloc = m_buffers.at(buffer);
 
-  for (unsigned int i = 0; i < count; ++i)
-    semaphores.emplace_back(engine.m_context.device().createSemaphore({}));
+  void * map = nullptr;
+  if (vmaMapMemory(m_allocator, alloc, &map) != VK_SUCCESS)
+    Log::runtime_error("failed to map buffer memory");
 
-  return std::move(semaphores);
+  return map;
 }
 
-Allocator::DescriptorOutput Allocator::descriptorPool(
-  const Engine& engine, const vk::raii::DescriptorSetLayout& setLayout,
-  unsigned int storageCount,
-  unsigned int imageCount,
-  unsigned int samplerCount
-) {
-  std::vector<vk::DescriptorPoolSize> poolSizes;
-
-  if (storageCount > 0) {
-    poolSizes.emplace_back(vk::DescriptorPoolSize{
-      .type             = vk::DescriptorType::eStorageBuffer,
-      .descriptorCount  = storageCount
-    });
-  }
-
-  if (imageCount > 0) {
-    poolSizes.emplace_back(vk::DescriptorPoolSize{
-      .type             = vk::DescriptorType::eStorageImage,
-      .descriptorCount  = imageCount
-    });
-    samplerCount += imageCount;
-  }
-
-  if (samplerCount > 0) {
-    poolSizes.emplace_back(vk::DescriptorPoolSize{
-      .type             = vk::DescriptorType::eCombinedImageSampler,
-      .descriptorCount  = samplerCount
-    });
-  }
-
-  vk::raii::DescriptorPool pool = engine.m_context.device().createDescriptorPool(vk::DescriptorPoolCreateInfo{
-    .flags          = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet,
-    .maxSets        = engine.m_settings.buffer_mode,
-    .poolSizeCount  = static_cast<unsigned int>(poolSizes.size()),
-    .pPoolSizes     = poolSizes.data()
-  });
-
-  std::vector<vk::DescriptorSetLayout> layouts;
-  for (unsigned int i = 0; i < engine.m_settings.buffer_mode; ++i)
-    layouts.emplace_back(*setLayout);
-
-  vk::raii::DescriptorSets sets(engine.m_context.device(), vk::DescriptorSetAllocateInfo{
-    .descriptorPool     = pool,
-    .descriptorSetCount = engine.m_settings.buffer_mode,
-    .pSetLayouts        = layouts.data()
-  });
-
-  return { std::move(pool), std::move(sets) };
+void Allocator::unmapBuffer(const vk::Buffer& buffer) {
+  VmaAllocation alloc = m_buffers.at(buffer);
+  vmaUnmapMemory(m_allocator, alloc);
 }
 
-Allocator::ImageOutput Allocator::imagePool(
-  const Engine& engine, const std::vector<std::pair<unsigned int, unsigned int>>& imageInfos,
-  const vk::ImageUsageFlags& usage,
-  const vk::Format& format
-) {
-  std::vector<vk::raii::Image> images;
-  for (const auto& [width, height] : imageInfos) {
-    images.emplace_back(engine.m_context.device().createImage(vk::ImageCreateInfo{
-      .imageType  = vk::ImageType::e2D,
-      .format     = format,
-      .extent     = vk::Extent3D{
-        .width  = width,
-        .height = height,
-        .depth  = 1
-      },
-      .mipLevels    = 1,
-      .arrayLayers  = 1,
-      .samples      = vk::SampleCountFlagBits::e1,
-      .tiling       = vk::ImageTiling::eOptimal,
-      .usage        = usage
-    }));
-  }
-
-  std::vector<unsigned int> offsets;
-  unsigned int allocationSize = 0;
-  unsigned int filter = ~(0x0);
-  for (auto& image : images) {
-    vk::MemoryRequirements requirements = image.getMemoryRequirements();
-
-    while (allocationSize % requirements.alignment != 0)
-      ++allocationSize;
-    offsets.emplace_back(allocationSize);
-
-    allocationSize += requirements.size;
-    filter &= requirements.memoryTypeBits;
-  }
-
-  vk::raii::DeviceMemory memory = allocate(engine, allocationSize, filter, vk::MemoryPropertyFlagBits::eDeviceLocal);
-
-  unsigned int i = 0;
-  for (auto& image : images)
-    image.bindMemory(memory, offsets[i++]);
-
-  std::vector<vk::raii::ImageView> views;
-  for (auto& image : images) {
-    views.emplace_back(engine.m_context.device().createImageView(vk::ImageViewCreateInfo{
-      .image            = image,
-      .viewType         = vk::ImageViewType::e2D,
-      .format           = format,
-      .subresourceRange = {
-        .aspectMask = vk::ImageAspectFlagBits::eColor,
-        .levelCount = 1,
-        .layerCount = 1
-      }
-    }));
-  }
-
-  return { std::move(memory), std::move(images), std::move(views), std::move(offsets), std::move(allocationSize) };
+void Allocator::destroyBuffer(const vk::Buffer& buffer) {
+  VmaAllocation alloc = m_buffers.at(buffer);
+  vmaDestroyBuffer(m_allocator, buffer, alloc);
+  m_buffers.erase(buffer);
 }
 
-Allocator::SamplerOutput Allocator::sampler(const Engine& engine) {
-  return engine.m_context.device().createSampler(vk::SamplerCreateInfo{
-    .magFilter        = vk::Filter::eLinear,
-    .minFilter        = vk::Filter::eLinear,
-    .addressModeU     = vk::SamplerAddressMode::eRepeat,
-    .addressModeV     = vk::SamplerAddressMode::eRepeat,
-    .addressModeW     = vk::SamplerAddressMode::eRepeat,
-    .anisotropyEnable = true,
-    .maxAnisotropy    = engine.m_context.gpu().getProperties().limits.maxSamplerAnisotropy
-  });
+unsigned int Allocator::bufferSize(const vk::Buffer& buffer) const {
+  VmaAllocation allocation = m_buffers.at(buffer);
+
+  VmaAllocationInfo info;
+  vmaGetAllocationInfo(m_allocator, allocation, &info);
+
+  return info.size;
 }
 
-vk::raii::DeviceMemory Allocator::allocate(
-  const Engine& engine,
-  const unsigned int& size,
-  const unsigned int& filter,
-  const vk::MemoryPropertyFlags& flags
-) {
-  vk::PhysicalDeviceMemoryProperties properties = engine.m_context.gpu().getMemoryProperties();
+vk::Image Allocator::allocateImage(const vk::ImageCreateInfo& createInfo, VmaMemoryUsage memoryUsage) {
+  VmaAllocationCreateInfo allocationCreateInfo{
+    .usage          = memoryUsage,
+    .requiredFlags  = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
+  };
 
-  unsigned int index = 0;
-  for (const auto& memoryType : properties.memoryTypes) {
-    if (index == properties.memoryTypeCount)
-      throw std::runtime_error("groot-engine: unable to find suitable memory type index");
+  VkImage image;
+  VmaAllocation allocation;
 
-    if ((filter & (1 << index)) && ((memoryType.propertyFlags & flags) == flags))
-      break;
-
-    ++index;
+  if (vmaCreateImage(
+    m_allocator,
+    reinterpret_cast<const VkImageCreateInfo *>(&createInfo),
+    &allocationCreateInfo,
+    &image,
+    &allocation,
+    nullptr
+  ) != VK_SUCCESS) {
+    Log::runtime_error("failed to allocate image");
   }
 
-  return engine.m_context.device().allocateMemory(vk::MemoryAllocateInfo{
-    .allocationSize   = size,
-    .memoryTypeIndex  = index
-  });
+  m_images[image] = allocation;
+  return image;
 }
 
-} // namespace ge
+void Allocator::destroyImage(const vk::Image& image) {
+  VmaAllocation alloc = m_images[image];
+  vmaDestroyImage(m_allocator, image, alloc);
+  m_images.erase(image);
+}
+
+} // namespace groot

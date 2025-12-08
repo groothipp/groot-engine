@@ -1,18 +1,49 @@
-cmake_minimum_required(VERSION 3.21)
+cmake_minimum_required(VERSION 4.2)
+
+option(GROOT_MAKE_TESTS "Compiles Groot Engine tests" OFF)
+
+set(GROOT_VERSION_MAJOR 2)
+set(GROOT_VERSION_MINOR 91)
+set(GROOT_VERSION_PATCH 20)
+
+project(GrootEngine
+  VERSION ${GROOT_VERSION_MAJOR}.${GROOT_VERSION_MINOR}.${GROOT_VERSION_PATCH}
+  LANGUAGES CXX
+)
+
+include(GNUInstallDirs)
+include(CMakePackageConfigHelpers)
 
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_STANDARD 23)
 
-set(GE_VERSION_MAJOR 1)
-set(GE_VERSION_MINOR 0)
-set(GE_VERSION_PATCH 0)
+add_subdirectory(${CMAKE_SOURCE_DIR}/src)
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O0 -g -fsanitize=address")
+if (GROOT_MAKE_TESTS)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address -g")
+  add_subdirectory(${CMAKE_SOURCE_DIR}/tests)
+endif()
 
-project(GrootEngine
-  VERSION ${GE_VERSION_MAJOR}.${GE_VERSION_MINOR}.${GE_VERSION_PATCH}
-  LANGUAGES CXX
+install(EXPORT GrootEngineTargets
+  FILE GrootEngineTargets.cmake
+  NAMESPACE GrootEngine::
+  DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/GrootEngine
 )
 
-add_subdirectory(${CMAKE_SOURCE_DIR}/src)
-add_subdirectory(${CMAKE_SOURCE_DIR}/tests)
+configure_package_config_file(
+  ${CMAKE_SOURCE_DIR}/GrootEngineConfig.cmake.in
+  ${CMAKE_CURRENT_BINARY_DIR}/GrootEngineConfig.cmake
+  INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/GrootEngine
+)
+
+write_basic_package_version_file(
+  ${CMAKE_CURRENT_BINARY_DIR}/GrootEngineConfigVersion.cmake
+  VERSION ${PROJECT_VERSION}
+  COMPATIBILITY SameMajorVersion
+)
+
+install(FILES
+  ${CMAKE_CURRENT_BINARY_DIR}/GrootEngineConfig.cmake
+  ${CMAKE_CURRENT_BINARY_DIR}/GrootEngineConfigVersion.cmake
+  DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/GrootEngine
+)

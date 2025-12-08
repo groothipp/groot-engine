@@ -1,66 +1,70 @@
 #pragma once
 
-#include "src/include/materials.hpp"
+#include "src/include/structs.hpp"
 
-#include <vulkan/vulkan_raii.hpp>
-#include <vulkan/vulkan_beta.h>
+#include <vulkan/vulkan.hpp>
 
+#include <set>
+#include <unordered_map>
 #include <vector>
 
-namespace ge {
+class GLFWwindow;
 
-class Engine;
+namespace groot {
+
+class Allocator;
+class VulkanContext;
+class Object;
 
 class Renderer {
+  vk::Extent2D m_extent;
+  vk::SurfaceFormatKHR m_colorFormat;
+  vk::Format m_depthFormat;
+  vk::PresentModeKHR m_presentMode;
+  vk::ClearColorValue m_clearColor{};
+
+  vk::SwapchainKHR m_swapchain = nullptr;
+  std::vector<vk::Image> m_images;
+  std::vector<vk::ImageView> m_views;
+  vk::Image m_depthImage = nullptr;
+  vk::ImageView m_depthView = nullptr;
+
+  std::vector<vk::CommandBuffer> m_cmds;
+  std::vector<vk::Fence> m_fences;
+  std::vector<vk::Semaphore> m_imageSemaphores;
+  std::vector<vk::Semaphore> m_renderSemaphores;
+
+  unsigned int m_flightFrames = 0;
+  unsigned int m_frameIndex = 0;
+
   public:
-    Renderer() = default;
-    Renderer(Renderer&) = delete;
+    Renderer(GLFWwindow *, const VulkanContext *, Allocator *, Settings&);
+    Renderer(const Renderer&) = delete;
     Renderer(Renderer&&) = delete;
 
     ~Renderer() = default;
 
-    Renderer& operator = (Renderer&) = delete;
-    Renderer& operator = (Renderer&&) = delete;
+    Renderer& operator=(const Renderer&) = delete;
+    Renderer& operator=(Renderer&&) = delete;
 
-    const unsigned int& frameIndex() const;
+    vk::Format depthFormat() const;
+    std::pair<unsigned int, unsigned int> extent() const;
+    unsigned int prepFrame(const vk::Device&) const;
+    const vk::CommandBuffer& renderBuffer() const;
 
-    void initialize(Engine&);
-    void render(const Engine&);
-
-  private:
-    void checkFormat(Engine&) const;
-    void checkPresentMode(Engine&) const;
-    std::pair<unsigned int, vk::SurfaceTransformFlagBitsKHR> checkExtent(Engine&) const;
-
-    void createSwapchain(const Engine&, const unsigned int&, const vk::SurfaceTransformFlagBitsKHR&);
-    void createViews(const Engine&);
-    void createSyncObjects(const Engine&);
-    void transitionImages(const Engine&, const unsigned int&);
-    void preDraw(const Engine&, const unsigned int&);
-    void draw(const Engine&);
-    void endRendering();
+    void render(
+      const VulkanContext *,
+      const std::set<Object>&,
+      const std::unordered_map<RID, unsigned long, RID::Hash>&,
+      unsigned int
+    );
+    void destroy(const VulkanContext *, Allocator *);
 
   private:
-    unsigned int m_frameIndex = 0;
-    mat4 m_view = mat4::view(vec3(0.0f, 0.0f, -2.0f), vec3(0.0f), vec3(0.0f, -1.0f, 0.0f));
-    mat4 m_projection = mat4::identity();
-
-    vk::raii::SwapchainKHR m_swapchain = nullptr;
-    std::vector<vk::Image> m_images;
-    std::vector<vk::raii::ImageView> m_views;
-
-    vk::raii::DeviceMemory m_depthMem = nullptr;
-    vk::raii::Image m_depthImage = nullptr;
-    vk::raii::ImageView m_depthView = nullptr;
-
-    vk::raii::CommandBuffers m_renderCmds = nullptr;
-    vk::raii::CommandBuffers m_computeCmds = nullptr;
-
-    std::vector<vk::raii::Fence> m_flightFences;
-    std::vector<vk::raii::Fence> m_computeFences;
-    std::vector<vk::raii::Semaphore> m_renderSemaphores;
-    std::vector<vk::raii::Semaphore> m_imageSemaphores;
-    std::vector<vk::raii::Semaphore> m_computeSemaphores;
+    vk::SurfaceFormatKHR checkFormat(const VulkanContext *, Settings&) const;
+    vk::Format getDepthFormat(const VulkanContext *) const;
+    vk::PresentModeKHR checkPresentMode(const VulkanContext *, Settings&) const;
+    vk::Extent2D getExtent(GLFWwindow *, const VulkanContext *) const;
 };
 
-} // namespace ge
+} // namespace groot

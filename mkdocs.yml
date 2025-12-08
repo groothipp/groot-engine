@@ -1,0 +1,27 @@
+site_name: Groot Engine Docs
+
+repo_url: https://github.com/groothipp/groot-engine
+repo_name: groot-engine
+edit_uri: edit/main/docs/
+
+nav:
+  - Home: index.md
+  - Getting Started:
+    - Installation: getting_started/installation.md
+    - Rendering an Object: getting_started/graphics.md
+    - Compute Dispatch: getting_started/compute.md
+    - Managing Input: getting_started/input.md
+
+theme:
+  name: material
+  palette:
+    - scheme: slate
+      primary: green
+      accent: deep orange
+      toggle:
+        icon: material/brightness-4
+    - scheme: default
+      primary: green
+      accent: deep orange
+      toggle:
+        icon: material/brightness-7

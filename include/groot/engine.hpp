@@ -1,23 +1,25 @@
 #pragma once
 
-#include "src/include/enums.hpp"
-#include "src/include/rid.hpp"
-#include "src/include/structs.hpp"
+#include "structs.hpp"
+#include "object.hpp"
 
-#include <string>
-#include <unordered_map>
 #include <functional>
 #include <queue>
 #include <set>
-#include <vector>
+#include <string>
 
 class GLFWwindow;
+
+namespace vk {
+
+class CommandBuffer;
+
+} // namespace vk
 
 namespace groot {
 
 class Allocator;
 class InputManager;
-class Object;
 class Renderer;
 class ShaderCompiler;
 class VulkanContext;

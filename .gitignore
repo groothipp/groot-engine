@@ -1,10 +1,10 @@
 # Directories
-/build/
-/.cache/
-/src.old/
-/tests.old/
-/__cmake_systeminformation/
-/.ropeproject/
+.cache/
+build/
+venv/
 
 # Files
 .DS_Store
+commit.txt
+todo.txt
+test_output.txt
