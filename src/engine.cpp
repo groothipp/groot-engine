@@ -352,6 +352,30 @@ RID Engine::create_storage_image(unsigned int width, unsigned int height, Format
 
   vk::Image image = m_allocator->allocateImage(imageCreateInfo);
 
+  vk::CommandBuffer cmdBuf = m_context->beginTransfer();
+
+  vk::ImageMemoryBarrier shaderBarrier{
+    .oldLayout        = vk::ImageLayout::eUndefined,
+    .newLayout        = vk::ImageLayout::eShaderReadOnlyOptimal,
+    .image            = image,
+    .subresourceRange = {
+      .aspectMask = vk::ImageAspectFlagBits::eColor,
+      .levelCount = 1,
+      .layerCount = 1
+    }
+  };
+
+  cmdBuf.pipelineBarrier(
+    vk::PipelineStageFlagBits::eTopOfPipe,
+    vk::PipelineStageFlagBits::eTopOfPipe,
+    vk::DependencyFlags(),
+    nullptr,
+    nullptr,
+    shaderBarrier
+  );
+
+  m_context->endTransfer(cmdBuf);
+
   vk::ImageViewCreateInfo viewCreateInfo{
     .image = image,
     .viewType = vk::ImageViewType::e2D,
