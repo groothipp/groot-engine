@@ -356,7 +356,7 @@ RID Engine::create_storage_image(unsigned int width, unsigned int height, Format
 
   vk::ImageMemoryBarrier shaderBarrier{
     .oldLayout        = vk::ImageLayout::eUndefined,
-    .newLayout        = vk::ImageLayout::eShaderReadOnlyOptimal,
+    .newLayout        = vk::ImageLayout::eGeneral,
     .image            = image,
     .subresourceRange = {
       .aspectMask = vk::ImageAspectFlagBits::eColor,
