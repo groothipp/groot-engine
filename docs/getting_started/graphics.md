@@ -1,6 +1,8 @@
 # Rendering an Object
 
-> This section will cover rendering an object with a texture on it. Grab the `cube.obj` and `test.png` files from the `tests/dat` folder in the Groot Engine repository if you do not have another object and/or image to use in mind. Before starting, make sure to set up a C++ project to use CMake and confirm linking to Groot Engine works.
+> This section will cover rendering an object with a texture on it. Tutorial resources are available below, but feel free to use your own obj file and image. Before starting, make sure to set up a C++ project to use CMake and confirm linking to Groot Engine works.
+
+[Resources](../resources/groot_engine_graphics_tutorial_resources.zip)
 
 In your main.cpp file, include `groot/groot.hpp` add a new `Engine` object
 
@@ -21,7 +23,6 @@ The `Engine` object is your interface to the GPU. Everything you do in Groot Eng
 Now create a new file called `shader.vert` and open it. This is the object's vertex shader that will run for every vertex specified in the mesh. In Groot Engine, vertices are defined by a `vec3` position, `vec2` UV coordinate, and `vec3` normal.
 
 > If your obj file does not define UV's or normals, Groot Engine will generate them when loading the mesh
-
 
 Here is the base vertex shader. We will add to this later once the object is set up.
 ```glsl
@@ -73,6 +74,7 @@ int main() {
   RID fragment_shader = engine.compile_shader(ShaderType::Fragment, "<path/to/fragment/shader>");
 }
 ```
+> Note that it might be best to check that these shaders are valid with the `RID::is_valid()` method, as if there are any compilation errors with your shaders the program will display the errors but not exit.
 
 The `RID` object ("resource ID") is the base of Groot Engine's resource management system. Groot Engine owns all of the Vulkan resources that you create so that you don't have to mange them yourself. Holding on to the resource's `RID` allows you to communicate with the engine about when you want to use the resource, as well as simplifies the setup of using the same resource for multiple purposes (ie. sharing a buffer between two descriptor sets). If the engine ever fails to create a resource, the RID will be invalid and you will get a message in the console.
 
@@ -229,7 +231,7 @@ int main() {
   
   Transform transform;
   UniformBuffer buffer{
-    .proj = engine.camera_proj()
+    .proj = engine.camera_projection()
   };
   
   engine.run([&engine, &uniform_buffer, &transform, &buffer](double dt) {
@@ -239,6 +241,7 @@ int main() {
     if (engine.just_pressed(Key::Escape))
       engine.close_window();
     
+    // rotate the cube at 10 radians a second
     transform.rotation += radians(10.0) * dt;
     
     buffer = UniformBuffer{
@@ -252,6 +255,6 @@ int main() {
 }
 ```
 
-The `run` method takes in a function that returns void and accepts a double argument. The double argument is the frame time and will be constant since the engine loop runs at a fixed time step.
+The `run` method takes in a function that returns void and accepts a double argument. The engine passes in the frame time as a double argument.
 
 Now just build your target (make sure to link to Groot Engine) and run it and you'll see your object spinning in the scene!

@@ -5,12 +5,12 @@ A small and simple Vulkan abstraction library meant to give access to GPU Render
 ## Features
 - **Simple API** - Small and straightforward to use.
 - **Resource Management** - Automatic resource lifetime tracking through the use of a resource ID system
-- **Built in Abstractions** - No need to bring in vulkan types as the lirary is entirely self contained
+- **Built in Abstractions** - No need to bring in vulkan types as the library is entirely self contained
 - **GPU Memory Management** - Uses AMD's Vulkan Memory Allocator to efficiently manage GPU memory 
 - **Input System** - Per-Frame tracked Keyboard and Mouse input state
 
 ## Getting Started
 - [Installation](getting_started/installation.md)
 - [Rendering an Object](getting_started/graphics.md)
-- [Dispatching Compute Shaders](getting_started/compute.md)
+- [Dispatching Compute Passes](getting_started/compute.md)
 - [Keyboard and Mouse Input](getting_started/input.md)

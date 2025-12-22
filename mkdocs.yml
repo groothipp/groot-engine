@@ -16,12 +16,15 @@ theme:
   name: material
   palette:
     - scheme: slate
-      primary: green
-      accent: deep orange
+      primary: custom
+      accent: custom
       toggle:
         icon: material/brightness-4
     - scheme: default
-      primary: green
-      accent: deep orange
+      primary: custom
+      accent: custom
       toggle:
         icon: material/brightness-7
+
+extra_css:
+  - stylesheets/extra.css
