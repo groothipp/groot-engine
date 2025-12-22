@@ -30,3 +30,7 @@ find_package(GrootEngine REQUIRED)
 
 target_link_libraries(<target_name> PRIVATE GrootEngine::groot)
 ```
+
+## Uninstalling
+
+Simply run the `uninstall.sh` script in the root of the Groot Engine repository if you installed it to your system. For custom install directories, you must delete the files yourself.
