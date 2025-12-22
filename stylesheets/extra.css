@@ -1,0 +1,27 @@
+/* Custom Groot Engine Theme Colors */
+
+/* Olive Green (Primary) */
+[data-md-color-primary=custom] {
+  --md-primary-fg-color: #6b7c59;        /* Olive green */
+  --md-primary-fg-color--light: #8b9c79;
+  --md-primary-fg-color--dark: #4b5c39;
+  --md-primary-bg-color: #ffffff;
+  --md-primary-bg-color--light: #f7f8f5;
+}
+
+/* Tree Bark Brown (Accent) */
+[data-md-color-accent=custom] {
+  --md-accent-fg-color: #6b5344;         /* Warm tree bark brown */
+  --md-accent-fg-color--transparent: #6b534419;
+  --md-accent-bg-color: #ffffff;
+  --md-accent-bg-color--light: #f7f5f4;
+}
+
+/* Custom Dark Mode - Warm Charcoal/Dark Brown-Gray */
+[data-md-color-scheme="slate"] {
+  --md-default-bg-color: #2b2622;        /* Dark warm brown-gray */
+  --md-default-fg-color: #e8e6e3;        /* Off-white text */
+  --md-code-bg-color: #1f1d1a;           /* Darker code blocks */
+  --md-code-fg-color: #e8e6e3;
+  --md-typeset-a-color: #8b9c79;         /* Lighter olive for links */
+}
