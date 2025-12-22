@@ -2,6 +2,7 @@
 .cache/
 build/
 venv/
+site/
 
 # Files
 .DS_Store
