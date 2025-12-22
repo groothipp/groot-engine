@@ -15,7 +15,6 @@ struct Settings {
   std::pair<unsigned int, unsigned int> window_size = std::make_pair(1280, 720);
   std::string window_title = "Groot Engine Application";
   unsigned int gpu_index = 0;
-  double time_step = 1.0 / 60.0;
   Format color_format = Format::bgra8_srgb;
   ColorSpace color_space = ColorSpace::srgb_nonlinear;
   RenderMode render_mode = RenderMode::TripleBuffer;

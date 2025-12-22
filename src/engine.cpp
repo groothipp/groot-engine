@@ -213,10 +213,7 @@ void Engine::run(std::function<void(double)> code) {
     unsigned int imgIndex = m_renderer->prepFrame(m_context->device());
     transitionImagesCompute();
 
-    while (m_accumulator >= m_settings.time_step) {
-      code(m_settings.time_step);
-      m_accumulator -= m_settings.time_step;
-    }
+    code(m_frameTime);
 
     transitionImagesGraphics(m_renderer->renderBuffer());
     m_renderer->render(m_context, m_scene, m_resources, imgIndex);
@@ -1537,7 +1534,6 @@ void Engine::updateTimes() {
 
   m_frameTime = std::min(time - m_time, 0.25);
   m_time = time;
-  m_accumulator += m_frameTime;
 }
 
 std::pair<unsigned int, void *> Engine::readBufferRaw(const RID& rid) const {
