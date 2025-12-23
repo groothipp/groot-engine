@@ -42,7 +42,7 @@ TEST_CASE( "image destruction" ) {
   SECTION( "image" ) {
     std::println(std::cout, "--- destroy image ---");
 
-    RID image = engine.create_storage_image(1024, 1024, Format::rgba8_unorm);
+    RID image = engine.create_storage_image(1024, 1024);
     REQUIRE( image.is_valid() );
 
     engine.destroy_image(image);
@@ -72,17 +72,17 @@ TEST_CASE( "invalid image operations" ) {
   SECTION( "0 in any dimension" ) {
     std::println(std::cout, "--- create image with 0 in dimension ---");
 
-    RID image = engine.create_storage_image(0, 1024, Format::rgba8_unorm);
+    RID image = engine.create_storage_image(0, 1024);
     CHECK_FALSE( image.is_valid() );
 
-    image = engine.create_storage_image(1024, 0, Format::rgba8_unorm);
+    image = engine.create_storage_image(1024, 0);
     CHECK_FALSE( image.is_valid() );
   }
 
   SECTION( "undefined format" ) {
     std::println(std::cout, "--- create image with undefined format ---");
 
-    RID image = engine.create_storage_image(1024, 1024, Format::undefined);
+    RID image = engine.create_storage_image(1024, 1024, ImageType::two_dim, Format::undefined);
     CHECK_FALSE( image.is_valid() );
   }
 
@@ -157,7 +157,7 @@ TEST_CASE( "invalid image operations" ) {
     RID sampler = engine.create_sampler({});
     REQUIRE( sampler.is_valid() );
 
-    RID storageTexture = engine.create_storage_texture(1024, 1024, sampler, Format::undefined);
+    RID storageTexture = engine.create_storage_texture(1024, 1024, sampler, ImageType::two_dim, Format::undefined);
     CHECK_FALSE( storageTexture.is_valid() );
   }
 }

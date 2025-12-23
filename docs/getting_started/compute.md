@@ -34,9 +34,11 @@ int main() {
   RID sampler = engine.create_sampler(SamplerSettings{});
 
   auto [width, height] = engine.viewport_dims();
-  RID storage_texture = engine.create_storage_texture(width, height, sampler, Format::rgba16_sfloat);
+  RID storage_texture = engine.create_storage_texture(width, height, sampler);
 }
 ```
+
+There are two additional arguments when creating a storage texture: the image type (1D, 2D, or 3D specified by the `ImageType` enum) and the format (specified by the `Format` enum). These are defaulted to 2D and the 16 bit float format.
 
 Now create a descriptor set that uses this storage texture.
 

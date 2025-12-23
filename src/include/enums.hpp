@@ -265,4 +265,10 @@ enum class Key {
   Menu          = 348
 };
 
+enum class ImageType {
+  one_dim,
+  two_dim,
+  three_dim
+};
+
 } // namespace groot

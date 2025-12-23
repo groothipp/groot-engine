@@ -320,7 +320,7 @@ void Engine::destroy_sampler(RID& rid) {
   rid.invalidate();
 }
 
-RID Engine::create_storage_image(unsigned int width, unsigned int height, Format format) {
+RID Engine::create_storage_image(unsigned int width, unsigned int height, ImageType type, Format format) {
   if (format == Format::undefined) {
     Log::warn("tried to create storage image with undefined format");
     return RID();
@@ -337,7 +337,7 @@ RID Engine::create_storage_image(unsigned int width, unsigned int height, Format
   }
 
   vk::ImageCreateInfo imageCreateInfo{
-    .imageType    = vk::ImageType::e2D,
+    .imageType    = static_cast<vk::ImageType>(type),
     .format       = static_cast<vk::Format>(format),
     .extent       = vk::Extent3D{ width, height, 1 },
     .mipLevels    = 1,
@@ -374,9 +374,9 @@ RID Engine::create_storage_image(unsigned int width, unsigned int height, Format
   m_context->endTransfer(cmdBuf);
 
   vk::ImageViewCreateInfo viewCreateInfo{
-    .image = image,
-    .viewType = vk::ImageViewType::e2D,
-    .format = static_cast<vk::Format>(format),
+    .image    = image,
+    .viewType = static_cast<vk::ImageViewType>(type),
+    .format   = static_cast<vk::Format>(format),
     .components = {
       .r = vk::ComponentSwizzle::eIdentity,
       .g = vk::ComponentSwizzle::eIdentity,
@@ -529,7 +529,7 @@ RID Engine::create_texture(const std::string& path, const RID& sampler) {
   return rid;
 }
 
-RID Engine::create_storage_texture(unsigned int width, unsigned int height, const RID& sampler, Format format) {
+RID Engine::create_storage_texture(unsigned int width, unsigned int height, const RID& sampler, ImageType type, Format format) {
   if (!sampler.is_valid()) {
     Log::warn("tried to create storage texture with invalid sampler RID");
     return RID();
@@ -546,7 +546,7 @@ RID Engine::create_storage_texture(unsigned int width, unsigned int height, cons
   }
 
   vk::ImageCreateInfo imageCreateInfo{
-    .imageType    = vk::ImageType::e2D,
+    .imageType    = static_cast<vk::ImageType>(type),
     .format       = static_cast<vk::Format>(format),
     .extent       = vk::Extent3D{ width, height, 1 },
     .mipLevels    = 1,
@@ -584,7 +584,7 @@ RID Engine::create_storage_texture(unsigned int width, unsigned int height, cons
 
   vk::ImageViewCreateInfo viewCreateInfo{
     .image = image,
-    .viewType = vk::ImageViewType::e2D,
+    .viewType = static_cast<vk::ImageViewType>(type),
     .format = static_cast<vk::Format>(format),
     .components = {
       .r = vk::ComponentSwizzle::eIdentity,

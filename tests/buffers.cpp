@@ -89,7 +89,7 @@ TEST_CASE( "invalid buffer operations" ) {
   SECTION( "destroy non-buffer RID" ) {
     std::println(std::cout, "--- destroy non-buffer RID ---");
 
-    RID image = engine.create_storage_image(1024, 1024, Format::rgba8_unorm);
+    RID image = engine.create_storage_image(1024, 1024);
     REQUIRE( image.is_valid() );
 
     engine.destroy_buffer(image);
@@ -111,7 +111,7 @@ TEST_CASE( "invalid buffer operations" ) {
   SECTION( "read non-buffer RID" ) {
     std::println(std::cout, "--- read non-buffer RID ---");
 
-    RID image = engine.create_storage_image(1024, 1024, Format::rgba8_unorm);
+    RID image = engine.create_storage_image(1024, 1024);
     REQUIRE( image.is_valid() );
 
     std::vector<int> data = engine.read_buffer<int>(image);
@@ -138,7 +138,7 @@ TEST_CASE( "invalid buffer operations" ) {
   SECTION( "write non-buffer RID" ) {
     std::println(std::cout, "--- write non-buffer RID ---");
 
-    RID image = engine.create_storage_image(1024, 1024, Format::rgba8_unorm);
+    RID image = engine.create_storage_image(1024, 1024);
     REQUIRE( image.is_valid() );
 
     std::vector<int> data(256);
