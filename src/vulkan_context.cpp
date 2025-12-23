@@ -246,6 +246,9 @@ void VulkanContext::chooseGPU(const unsigned int& gpuIndex, const std::vector<co
 
   vk::PhysicalDeviceFeatures features = gpus[gpuIndex].getFeatures();
 
+  if (!(features.shaderStorageImageReadWithoutFormat && features.shaderStorageImageWriteWithoutFormat))
+    Log::runtime_error("GPU cannot be used -- does not support read/write without format specifiers");
+
   if (!features.tessellationShader)
     Log::warn("GPU does not support tesselation shaders");
 
@@ -274,9 +277,11 @@ void VulkanContext::createDevice(std::vector<const char *>& extensions) {
 
   vk::PhysicalDeviceFeatures supportedFeatures = m_gpu.getFeatures();
   vk::PhysicalDeviceFeatures features{
-    .tessellationShader = supportedFeatures.tessellationShader,
-    .fillModeNonSolid   = supportedFeatures.fillModeNonSolid,
-    .samplerAnisotropy  = supportedFeatures.samplerAnisotropy
+    .tessellationShader                   = supportedFeatures.tessellationShader,
+    .fillModeNonSolid                     = supportedFeatures.fillModeNonSolid,
+    .samplerAnisotropy                    = supportedFeatures.samplerAnisotropy,
+    .shaderStorageImageReadWithoutFormat  = true,
+    .shaderStorageImageWriteWithoutFormat = true
   };
 
   vk::PhysicalDeviceDynamicRenderingFeatures dynamicRenderingFeature{

@@ -146,8 +146,6 @@ class alignas(64) Engine {
     void writeBufferRaw(const RID&, std::size_t, const void *) const;
     void transitionImagesCompute() const;
     void transitionImagesGraphics(const vk::CommandBuffer&) const;
-    void transitionPostProcess() const;
-    void transitionPresent(const vk::CommandBuffer&) const;
     void postProcess();
 };
 

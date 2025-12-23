@@ -1694,7 +1694,35 @@ void Engine::transitionImagesGraphics(const vk::CommandBuffer& cmdBuf) const {
   }
 }
 
-void Engine::transitionPostProcess() const {
+void Engine::postProcess() {
+  if (m_postProcessCmds.empty()) {
+    vk::CommandBuffer cmdBuf = m_context->beginDispatch();
+
+    vk::ImageMemoryBarrier barrier{
+      .srcAccessMask  = vk::AccessFlagBits::eShaderWrite,
+      .oldLayout      = vk::ImageLayout::eColorAttachmentOptimal,
+      .newLayout      = vk::ImageLayout::ePresentSrcKHR,
+      .image          = m_renderTarget->image,
+      .subresourceRange = {
+        .aspectMask = vk::ImageAspectFlagBits::eColor,
+        .levelCount = 1,
+        .layerCount = 1
+      }
+    };
+
+    cmdBuf.pipelineBarrier(
+      vk::PipelineStageFlagBits::eComputeShader,
+      vk::PipelineStageFlagBits::eBottomOfPipe,
+      vk::DependencyFlags(),
+      nullptr,
+      nullptr,
+      barrier
+    );
+
+    m_context->endDispatch(cmdBuf);
+    return;
+  }
+
   vk::CommandBuffer cmdBuf = m_context->beginDispatch();
 
   vk::ImageMemoryBarrier barrier{
@@ -1720,42 +1748,8 @@ void Engine::transitionPostProcess() const {
   );
 
   m_context->endDispatch(cmdBuf);
-}
 
-void Engine::transitionPresent(const vk::CommandBuffer& cmd) const {
-  vk::ImageMemoryBarrier barrier{
-    .srcAccessMask  = vk::AccessFlagBits::eShaderWrite,
-    .oldLayout      = vk::ImageLayout::eGeneral,
-    .newLayout      = vk::ImageLayout::ePresentSrcKHR,
-    .image          = m_renderTarget->image,
-    .subresourceRange = {
-      .aspectMask = vk::ImageAspectFlagBits::eColor,
-      .levelCount = 1,
-      .layerCount = 1
-    }
-  };
-
-  cmd.pipelineBarrier(
-    vk::PipelineStageFlagBits::eComputeShader,
-    vk::PipelineStageFlagBits::eBottomOfPipe,
-    vk::DependencyFlags(),
-    nullptr,
-    nullptr,
-    barrier
-  );
-}
-
-void Engine::postProcess() {
-  if (m_postProcessCmds.empty()) {
-    vk::CommandBuffer cmdBuf = m_context->beginDispatch();
-    transitionPresent(cmdBuf);
-    m_context->endDispatch(cmdBuf);
-    return;
-  }
-
-  transitionPostProcess();
-
-  vk::CommandBuffer cmdBuf = nullptr;
+  cmdBuf = nullptr;
   std::vector<RID> rids;
   while (!m_postProcessCmds.empty()) {
     ComputeCommand cmd = m_postProcessCmds.front();
@@ -1799,7 +1793,27 @@ void Engine::postProcess() {
     rids.emplace_back(cmd.descriptor_set);
   }
 
-  transitionPresent(cmdBuf);
+  barrier = vk::ImageMemoryBarrier{
+    .srcAccessMask  = vk::AccessFlagBits::eColorAttachmentWrite,
+    .dstAccessMask  = vk::AccessFlagBits::eShaderWrite,
+    .oldLayout      = vk::ImageLayout::eGeneral,
+    .newLayout      = vk::ImageLayout::ePresentSrcKHR,
+    .image          = m_renderTarget->image,
+    .subresourceRange = {
+      .aspectMask = vk::ImageAspectFlagBits::eColor,
+      .levelCount = 1,
+      .layerCount = 1
+    }
+  };
+
+  cmdBuf.pipelineBarrier(
+    vk::PipelineStageFlagBits::eColorAttachmentOutput,
+    vk::PipelineStageFlagBits::eComputeShader,
+    vk::DependencyFlags(),
+    nullptr,
+    nullptr,
+    barrier
+  );
 
   m_context->endDispatch(cmdBuf);
 

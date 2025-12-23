@@ -4,6 +4,7 @@
 #include "src/include/renderer.hpp"
 #include "src/include/structs.hpp"
 #include "src/include/vulkan_context.hpp"
+#include "vulkan/vulkan.hpp"
 
 #include <GLFW/glfw3.h>
 
@@ -48,6 +49,7 @@ Renderer::Renderer(
   m_swapchain = context->device().createSwapchainKHR(createInfo);
   m_images = context->device().getSwapchainImagesKHR(m_swapchain);
 
+  vk::CommandBuffer cmdBuf = context->beginTransfer();
   for (const auto& image : m_images) {
     m_views.emplace_back(context->device().createImageView(vk::ImageViewCreateInfo{
       .image    = image,
@@ -59,7 +61,30 @@ Renderer::Renderer(
         .layerCount = 1
       }
     }));
+
+    vk::ImageMemoryBarrier barrier{
+      .srcAccessMask = vk::AccessFlagBits::eNone,
+      .dstAccessMask = vk::AccessFlagBits::eNone,
+      .oldLayout  = vk::ImageLayout::eUndefined,
+      .newLayout  = vk::ImageLayout::ePresentSrcKHR,
+      .image      = image,
+      .subresourceRange = {
+        .aspectMask = vk::ImageAspectFlagBits::eColor,
+        .levelCount = 1,
+        .layerCount = 1
+      }
+    };
+
+    cmdBuf.pipelineBarrier(
+      vk::PipelineStageFlagBits::eTopOfPipe,
+      vk::PipelineStageFlagBits::eBottomOfPipe,
+      vk::DependencyFlags(),
+      nullptr,
+      nullptr,
+      barrier
+    );
   }
+  context->endTransfer(cmdBuf);
 
   m_depthImage = allocator->allocateImage(vk::ImageCreateInfo{
     .imageType    = vk::ImageType::e2D,
@@ -113,8 +138,9 @@ unsigned int Renderer::prepFrame(const vk::Device& device) const {
   m_cmds[m_frameIndex].begin(vk::CommandBufferBeginInfo{});
 
   vk::ImageMemoryBarrier barrier{
-    .dstAccessMask = vk::AccessFlagBits::eColorAttachmentWrite,
-    .oldLayout      = vk::ImageLayout::eUndefined,
+    .srcAccessMask = vk::AccessFlagBits::eNone,
+    .dstAccessMask = vk::AccessFlagBits::eColorAttachmentWrite | vk::AccessFlagBits::eColorAttachmentRead,
+    .oldLayout      = vk::ImageLayout::ePresentSrcKHR,
     .newLayout      = vk::ImageLayout::eColorAttachmentOptimal,
     .image          = m_images[imgIndex],
     .subresourceRange = {
@@ -125,9 +151,9 @@ unsigned int Renderer::prepFrame(const vk::Device& device) const {
   };
 
   m_cmds[m_frameIndex].pipelineBarrier(
-    vk::PipelineStageFlagBits::eTopOfPipe,
-    vk::PipelineStageFlagBits::eColorAttachmentOutput,
-    vk::DependencyFlags(),
+    vk::PipelineStageFlagBits::eAllCommands,
+    vk::PipelineStageFlagBits::eAllCommands,
+    vk::DependencyFlags{},
     nullptr,
     nullptr,
     barrier
@@ -208,27 +234,6 @@ void Renderer::render(
   }
 
   m_cmds[m_frameIndex].endRendering();
-
-  vk::ImageMemoryBarrier barrier{
-    .srcAccessMask  = vk::AccessFlagBits::eColorAttachmentWrite,
-    .oldLayout      = vk::ImageLayout::eColorAttachmentOptimal,
-    .newLayout      = vk::ImageLayout::ePresentSrcKHR,
-    .image          = m_images[imgIndex],
-    .subresourceRange = {
-      .aspectMask = vk::ImageAspectFlagBits::eColor,
-      .levelCount = 1,
-      .layerCount = 1
-    }
-  };
-
-  m_cmds[m_frameIndex].pipelineBarrier(
-    vk::PipelineStageFlagBits::eColorAttachmentOutput,
-    vk::PipelineStageFlagBits::eBottomOfPipe,
-    vk::DependencyFlags(),
-    nullptr,
-    nullptr,
-    barrier
-  );
 
   m_cmds[m_frameIndex].end();
 
