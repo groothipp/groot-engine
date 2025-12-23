@@ -288,6 +288,7 @@ RID Engine::create_sampler(const SamplerSettings& settings) {
     .minFilter        = static_cast<vk::Filter>(settings.min_filter),
     .addressModeU     = static_cast<vk::SamplerAddressMode>(settings.mode_u),
     .addressModeV     = static_cast<vk::SamplerAddressMode>(settings.mode_v),
+    .addressModeW     = static_cast<vk::SamplerAddressMode>(settings.mode_w),
     .anisotropyEnable = true,
     .maxAnisotropy    = m_context->gpu().getProperties().limits.maxSamplerAnisotropy
   });

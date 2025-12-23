@@ -52,6 +52,7 @@ struct SamplerSettings {
   Filter min_filter = Filter::Linear;
   SampleMode mode_u = SampleMode::Repeat;
   SampleMode mode_v = SampleMode::Repeat;
+  SampleMode mode_w = SampleMode::Repeat;
   bool anisotropic_filtering = true;
 };
 
