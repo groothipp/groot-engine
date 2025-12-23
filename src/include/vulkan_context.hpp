@@ -51,6 +51,7 @@ class VulkanContext {
     std::vector<vk::Semaphore> createRenderSemaphores(unsigned int) const;
     void destroyRenderBuffers(std::vector<vk::CommandBuffer>&) const;
     void submitRender(const RenderInfo&) const;
+    void presentRender(const PresentInfo&) const;
 
     void createSurface(GLFWwindow *);
     void chooseGPU(const unsigned int&, const std::vector<const char *>&);

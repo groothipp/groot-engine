@@ -78,8 +78,9 @@ struct ComputeCommand {
   RID pipeline = RID();
   RID descriptor_set = RID();
   std::vector<uint8_t> push_constants;
-  bool barrier = false;
   std::tuple<unsigned int, unsigned int, unsigned int> work_groups = { 1, 1, 1 };
+  bool barrier = false;
+  bool post_process = false;
 };
 
 struct Vertex {
@@ -116,8 +117,12 @@ struct RenderInfo {
   vk::Fence fence = nullptr;
   vk::Semaphore imageSemaphore = nullptr;
   vk::Semaphore renderSemaphore = nullptr;
+};
+
+struct PresentInfo {
   vk::SwapchainKHR swapchain = nullptr;
   unsigned int imgIndex = 0;
+  vk::Semaphore renderSemaphore = nullptr;
 };
 
 } // namespace groot

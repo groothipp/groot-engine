@@ -107,6 +107,7 @@ Engine::~Engine() {
 
         break;
       }
+      default: continue;
     }
   }
 
@@ -184,6 +185,15 @@ void Engine::release_cursor() const {
     glfwSetInputMode(m_window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
 }
 
+RID Engine::render_target() {
+  if (m_renderTarget == nullptr) {
+    Log::warn("Tried to get render target RID when no render target has been created yet");
+    return RID();
+  }
+
+  return RID(0, ResourceType::RenderTarget);
+}
+
 void Engine::translate_camera(const vec3& delta) {
   m_cameraEye = m_cameraEye + delta;
   m_cameraTarget = m_cameraTarget + delta;
@@ -211,12 +221,22 @@ void Engine::run(std::function<void(double)> code) {
     glfwPollEvents();
 
     unsigned int imgIndex = m_renderer->prepFrame(m_context->device());
-    transitionImagesCompute();
+    auto [image, view] = m_renderer->target(imgIndex);
 
+    m_renderTarget = new ImageHandle;
+    m_renderTarget->image = image;
+    m_renderTarget->view = view;
+
+    transitionImagesCompute();
     code(m_frameTime);
 
     transitionImagesGraphics(m_renderer->renderBuffer());
     m_renderer->render(m_context, m_scene, m_resources, imgIndex);
+
+    postProcess();
+
+    m_renderer->submit(m_context, imgIndex);
+    delete m_renderTarget;
   }
 
   m_context->device().waitIdle();
@@ -883,6 +903,37 @@ RID Engine::create_descriptor_set(const std::vector<RID>& descriptors) {
 
         break;
       }
+      case RenderTarget: {
+        if (imagePoolIndex == -1) {
+          imagePoolIndex = poolSizes.size();
+          poolSizes.emplace_back(vk::DescriptorPoolSize{
+            .type = vk::DescriptorType::eStorageImage
+          });
+        }
+        ++poolSizes[imagePoolIndex].descriptorCount;
+
+        bindings.emplace_back(vk::DescriptorSetLayoutBinding{
+          .binding          = binding,
+          .descriptorType   = vk::DescriptorType::eStorageImage,
+          .descriptorCount  = 1,
+          .stageFlags       = vk::ShaderStageFlagBits::eAll
+        });
+
+        imageInfos.emplace_back(vk::DescriptorImageInfo{
+          .imageView    = m_renderTarget->view,
+          .imageLayout  = vk::ImageLayout::eGeneral
+        });
+
+        writes.emplace_back(vk::WriteDescriptorSet{
+          .dstSet           = nullptr,
+          .dstBinding       = binding++,
+          .descriptorCount  = 1,
+          .descriptorType   = vk::DescriptorType::eStorageImage,
+          .pImageInfo       = &imageInfos.back()
+        });
+
+        break;
+      }
       case Invalid:
         Log::warn("invalid RID given as a descriptor");
         return RID();
@@ -1454,7 +1505,7 @@ void Engine::compute_command(const ComputeCommand& cmd) {
     return;
   }
 
-  m_computeCmds.emplace(cmd);
+  cmd.post_process ? m_postProcessCmds.emplace(cmd) : m_computeCmds.emplace(cmd);
 }
 
 void Engine::dispatch() {
@@ -1640,6 +1691,127 @@ void Engine::transitionImagesGraphics(const vk::CommandBuffer& cmdBuf) const {
       nullptr,
       barrier
     );
+  }
+}
+
+void Engine::transitionPostProcess() const {
+  vk::CommandBuffer cmdBuf = m_context->beginDispatch();
+
+  vk::ImageMemoryBarrier barrier{
+    .srcAccessMask  = vk::AccessFlagBits::eColorAttachmentWrite,
+    .dstAccessMask  = vk::AccessFlagBits::eShaderWrite,
+    .oldLayout      = vk::ImageLayout::eColorAttachmentOptimal,
+    .newLayout      = vk::ImageLayout::eGeneral,
+    .image          = m_renderTarget->image,
+    .subresourceRange = {
+      .aspectMask = vk::ImageAspectFlagBits::eColor,
+      .levelCount = 1,
+      .layerCount = 1
+    }
+  };
+
+  cmdBuf.pipelineBarrier(
+    vk::PipelineStageFlagBits::eColorAttachmentOutput,
+    vk::PipelineStageFlagBits::eComputeShader,
+    vk::DependencyFlags(),
+    nullptr,
+    nullptr,
+    barrier
+  );
+
+  m_context->endDispatch(cmdBuf);
+}
+
+void Engine::transitionPresent(const vk::CommandBuffer& cmd) const {
+  vk::ImageMemoryBarrier barrier{
+    .srcAccessMask  = vk::AccessFlagBits::eShaderWrite,
+    .oldLayout      = vk::ImageLayout::eGeneral,
+    .newLayout      = vk::ImageLayout::ePresentSrcKHR,
+    .image          = m_renderTarget->image,
+    .subresourceRange = {
+      .aspectMask = vk::ImageAspectFlagBits::eColor,
+      .levelCount = 1,
+      .layerCount = 1
+    }
+  };
+
+  cmd.pipelineBarrier(
+    vk::PipelineStageFlagBits::eComputeShader,
+    vk::PipelineStageFlagBits::eBottomOfPipe,
+    vk::DependencyFlags(),
+    nullptr,
+    nullptr,
+    barrier
+  );
+}
+
+void Engine::postProcess() {
+  if (m_postProcessCmds.empty()) {
+    vk::CommandBuffer cmdBuf = m_context->beginDispatch();
+    transitionPresent(cmdBuf);
+    m_context->endDispatch(cmdBuf);
+    return;
+  }
+
+  transitionPostProcess();
+
+  vk::CommandBuffer cmdBuf = nullptr;
+  std::vector<RID> rids;
+  while (!m_postProcessCmds.empty()) {
+    ComputeCommand cmd = m_postProcessCmds.front();
+    m_postProcessCmds.pop();
+
+    if (cmdBuf == nullptr)
+      cmdBuf = m_context->beginDispatch();
+    else if (cmd.barrier) {
+      m_context->endDispatch(cmdBuf);
+      cmdBuf = m_context->beginDispatch();
+    }
+
+    PipelineHandle * pipeline = reinterpret_cast<PipelineHandle *>(m_resources.at(cmd.pipeline));
+    DescriptorSetHandle * set = reinterpret_cast<DescriptorSetHandle *>(m_resources.at(cmd.descriptor_set));
+
+    cmdBuf.bindPipeline(vk::PipelineBindPoint::eCompute, pipeline->pipeline);
+
+    cmdBuf.bindDescriptorSets(
+      vk::PipelineBindPoint::eCompute,
+      pipeline->layout,
+      0,
+      1,
+      &set->set,
+      0,
+      nullptr
+    );
+
+    if (!cmd.push_constants.empty()) {
+      cmdBuf.pushConstants<uint8_t>(
+        pipeline->layout,
+        vk::ShaderStageFlagBits::eCompute,
+        0,
+        cmd.push_constants
+      );
+    }
+
+    auto [x, y, z] = cmd.work_groups;
+    cmdBuf.dispatch(x, y, z);
+
+    rids.emplace_back(cmd.pipeline);
+    rids.emplace_back(cmd.descriptor_set);
+  }
+
+  transitionPresent(cmdBuf);
+
+  m_context->endDispatch(cmdBuf);
+
+  for (auto& rid : rids) {
+    switch (rid.m_type) {
+      case DescriptorSet:
+        destroy_descriptor_set(rid);
+        break;
+      case Pipeline:
+        destroy_pipeline(rid);
+      default: break;
+    }
   }
 }
 

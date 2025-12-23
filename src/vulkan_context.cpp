@@ -1,5 +1,4 @@
 #include "src/include/log.hpp"
-#include "vulkan/vulkan.hpp"
 #include "src/include/vulkan_context.hpp"
 
 #include <vulkan/vulkan_beta.h>
@@ -205,7 +204,9 @@ void VulkanContext::submitRender(const RenderInfo& info) const {
     .signalSemaphoreCount = 1,
     .pSignalSemaphores    = &info.renderSemaphore
   }, info.fence);
+}
 
+void VulkanContext::presentRender(const PresentInfo& info) const {
   vk::PresentInfoKHR presentInfo{
     .waitSemaphoreCount = 1,
     .pWaitSemaphores    = &info.renderSemaphore,
@@ -243,13 +244,15 @@ void VulkanContext::chooseGPU(const unsigned int& gpuIndex, const std::vector<co
   if (extensionErrors != "")
     Log::runtime_error(std::format("GPU does not support the following extensions:{}", extensionErrors));
 
-  if (!gpus[gpuIndex].getFeatures().tessellationShader)
+  vk::PhysicalDeviceFeatures features = gpus[gpuIndex].getFeatures();
+
+  if (!features.tessellationShader)
     Log::warn("GPU does not support tesselation shaders");
 
-  if (!gpus[gpuIndex].getFeatures().fillModeNonSolid)
+  if (!features.fillModeNonSolid)
     Log::warn("GPU does not support non-solid mesh types");
 
-  if (!gpus[gpuIndex].getFeatures().samplerAnisotropy)
+  if (!features.samplerAnisotropy)
     Log::warn("GPU does not support anisotropic filtering");
 
   m_gpu = gpus[gpuIndex];
@@ -269,10 +272,11 @@ void VulkanContext::createDevice(std::vector<const char *>& extensions) {
     break;
   }
 
+  vk::PhysicalDeviceFeatures supportedFeatures = m_gpu.getFeatures();
   vk::PhysicalDeviceFeatures features{
-    .tessellationShader = m_gpu.getFeatures().tessellationShader,
-    .fillModeNonSolid   = m_gpu.getFeatures().fillModeNonSolid,
-    .samplerAnisotropy  = m_gpu.getFeatures().samplerAnisotropy
+    .tessellationShader = supportedFeatures.tessellationShader,
+    .fillModeNonSolid   = supportedFeatures.fillModeNonSolid,
+    .samplerAnisotropy  = supportedFeatures.samplerAnisotropy
   };
 
   vk::PhysicalDeviceDynamicRenderingFeatures dynamicRenderingFeature{

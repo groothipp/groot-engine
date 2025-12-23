@@ -36,6 +36,7 @@ class Renderer {
 
   unsigned int m_flightFrames = 0;
   unsigned int m_frameIndex = 0;
+  bool m_supportsSampling = false;
 
   public:
     Renderer(GLFWwindow *, const VulkanContext *, Allocator *, Settings&);
@@ -51,6 +52,7 @@ class Renderer {
     std::pair<unsigned int, unsigned int> extent() const;
     unsigned int prepFrame(const vk::Device&) const;
     const vk::CommandBuffer& renderBuffer() const;
+    std::pair<const vk::Image&, const vk::ImageView&> target(unsigned int) const;
 
     void render(
       const VulkanContext *,
@@ -58,6 +60,7 @@ class Renderer {
       const std::unordered_map<RID, unsigned long, RID::Hash>&,
       unsigned int
     );
+    void submit(const VulkanContext *, unsigned int);
     void destroy(const VulkanContext *, Allocator *);
 
   private:

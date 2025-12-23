@@ -21,10 +21,12 @@ TEST_CASE( "render", "[render]" ) {
   RID cube_frag = engine.compile_shader(ShaderType::Fragment, std::format("{}/dat/cube_frag.glsl", GROOT_TEST_DIR));
   RID plane_vert = engine.compile_shader(ShaderType::Vertex, std::format("{}/dat/plane_vert.glsl", GROOT_TEST_DIR));
   RID plane_frag = engine.compile_shader(ShaderType::Fragment, std::format("{}/dat/plane_frag.glsl", GROOT_TEST_DIR));
+  RID post_comp = engine.compile_shader(ShaderType::Compute, std::format("{}/dat/post.comp", GROOT_TEST_DIR));
   REQUIRE( cube_vert.is_valid() );
   REQUIRE( cube_frag.is_valid() );
   REQUIRE( plane_vert.is_valid() );
   REQUIRE( plane_frag.is_valid() );
+  REQUIRE( post_comp.is_valid() );
 
   RID sampler = engine.create_sampler(SamplerSettings{
     .anisotropic_filtering = false
@@ -129,7 +131,7 @@ TEST_CASE( "render", "[render]" ) {
   double inputTimer = 0.0;
 
   engine.run([
-    &engine, &cube_buffer, &transform_buffer, &transform, &inputTimer,
+    &engine, &cube_buffer, &transform_buffer, &transform, &inputTimer, &post_comp, &width, &height,
     &velocity, &sensitivity, &lastCursorPos, &cursorPos, &plane_transform_buffer, &plane_buffer
   ](double dt) {
     inputTimer += dt;
@@ -179,5 +181,15 @@ TEST_CASE( "render", "[render]" ) {
 
     plane_transform_buffer.view = engine.camera_view();
     engine.write_buffer(plane_buffer, plane_transform_buffer);
+
+    RID post_set = engine.create_descriptor_set({ engine.render_target() });
+    RID post_pipeline = engine.create_compute_pipeline(post_comp, post_set);
+
+    engine.compute_command(ComputeCommand{
+      .pipeline       = post_pipeline,
+      .descriptor_set = post_set,
+      .work_groups    = { (width + 7) / 8, (height + 7) / 8, 1 },
+      .post_process   = true
+    });
   });
 }

@@ -1,6 +1,5 @@
 #pragma once
 
-
 namespace groot {
 
 enum class ShaderType {
@@ -22,7 +21,8 @@ enum ResourceType {
   Sampler,
   StorageImage,
   StorageTexture,
-  Texture
+  Texture,
+  RenderTarget
 };
 
 enum class Format {

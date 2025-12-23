@@ -4,7 +4,6 @@
 #include "src/include/renderer.hpp"
 #include "src/include/structs.hpp"
 #include "src/include/vulkan_context.hpp"
-#include "vulkan/vulkan.hpp"
 
 #include <GLFW/glfw3.h>
 
@@ -42,7 +41,7 @@ Renderer::Renderer(
     .imageColorSpace  = m_colorFormat.colorSpace,
     .imageExtent      = m_extent,
     .imageArrayLayers = 1,
-    .imageUsage       = vk::ImageUsageFlagBits::eColorAttachment,
+    .imageUsage       = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eStorage,
     .presentMode      = m_presentMode
   };
 
@@ -90,12 +89,12 @@ Renderer::Renderer(
   m_renderSemaphores = context->createRenderSemaphores(m_flightFrames);
 }
 
-std::pair<unsigned int, unsigned int> Renderer::extent() const {
-  return std::make_pair(m_extent.width, m_extent.height);
-}
-
 vk::Format Renderer::depthFormat() const {
   return m_depthFormat;
+}
+
+std::pair<unsigned int, unsigned int> Renderer::extent() const {
+  return std::make_pair(m_extent.width, m_extent.height);
 }
 
 unsigned int Renderer::prepFrame(const vk::Device& device) const {
@@ -139,6 +138,10 @@ unsigned int Renderer::prepFrame(const vk::Device& device) const {
 
 const vk::CommandBuffer& Renderer::renderBuffer() const {
   return m_cmds[m_frameIndex];
+}
+
+std::pair<const vk::Image&, const vk::ImageView&> Renderer::target(unsigned int index) const {
+  return { m_images[index], m_views[index] };
 }
 
 void Renderer::render(
@@ -233,9 +236,15 @@ void Renderer::render(
     .cmdBuf           = m_cmds[m_frameIndex],
     .fence            = m_fences[m_frameIndex],
     .imageSemaphore   = m_imageSemaphores[m_frameIndex],
-    .renderSemaphore  = m_renderSemaphores[m_frameIndex],
+    .renderSemaphore  = m_renderSemaphores[m_frameIndex]
+  });
+}
+
+void Renderer::submit(const VulkanContext * context, unsigned int imgIndex) {
+  context->presentRender(PresentInfo{
     .swapchain        = m_swapchain,
-    .imgIndex         = imgIndex
+    .imgIndex         = imgIndex,
+    .renderSemaphore  = m_renderSemaphores[m_frameIndex]
   });
 
   m_frameIndex = (m_frameIndex + 1) % m_flightFrames;

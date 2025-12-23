@@ -19,6 +19,7 @@ enum class ResourceType {
   StorageBuffer,
   Sampler,
   Image,
+  RenderTarget
 };
 
 enum class Format {

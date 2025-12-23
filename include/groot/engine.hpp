@@ -18,6 +18,8 @@ class CommandBuffer;
 
 namespace groot {
 
+struct ImageHandle;
+
 class Allocator;
 class InputManager;
 class Renderer;
@@ -33,12 +35,14 @@ class alignas(64) Engine {
   Renderer * m_renderer = nullptr;
   InputManager * m_inputManager = nullptr;
 
-  unsigned long m_nextRID = 0;
+  unsigned long m_nextRID = 1;
   std::unordered_map<RID, unsigned long, RID::Hash> m_resources;
   std::set<RID> m_busySamplers;
   std::set<unsigned long> m_storageTextures;
 
   std::queue<ComputeCommand> m_computeCmds;
+  std::queue<ComputeCommand> m_postProcessCmds;
+  ImageHandle * m_renderTarget = nullptr;
 
   std::set<Object> m_scene;
   vec3 m_cameraEye = vec3(0.0f, 0.0f, 2.0f);
@@ -72,6 +76,7 @@ class alignas(64) Engine {
     void capture_cursor() const;
     void release_cursor() const;
 
+    RID render_target();
     void translate_camera(const vec3&);
     void rotate_camera(float, float);
     void run(std::function<void(double)> code = [](double){});
@@ -115,9 +120,9 @@ class alignas(64) Engine {
     RID create_sampler(const SamplerSettings&);
     void destroy_sampler(RID&);
 
-    RID create_storage_image(unsigned int, unsigned int, ImageType type = ImageType::two_dim, Format format = Format::rgba16_sfloat);
+    RID create_storage_image(unsigned int, unsigned int, ImageType type = ImageType::two_dim, Format format = Format::rgba16_unorm);
     RID create_texture(const std::string&, const RID&);
-    RID create_storage_texture(unsigned int, unsigned int, const RID&, ImageType type = ImageType::two_dim, Format format = Format::rgba16_sfloat);
+    RID create_storage_texture(unsigned int, unsigned int, const RID&, ImageType type = ImageType::two_dim, Format format = Format::rgba16_unorm);
     void destroy_image(RID&);
 
     RID compile_shader(ShaderType type, const std::string&);
@@ -145,6 +150,9 @@ class alignas(64) Engine {
     void writeBufferRaw(const RID&, std::size_t, const void *) const;
     void transitionImagesCompute() const;
     void transitionImagesGraphics(const vk::CommandBuffer&) const;
+    void transitionPostProcess() const;
+    void transitionPresent(const vk::CommandBuffer&) const;
+    void postProcess();
 };
 
 } // namespace groot

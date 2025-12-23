@@ -34,16 +34,16 @@ TEST_CASE( "compute dispatch" ) {
     .pipeline       = pipeline,
     .descriptor_set = set,
     .push_constants = { 12, 0, 0, 0 },
-    .barrier        = true,
-    .work_groups    = { 32, 1, 1 }
+    .work_groups    = { 32, 1, 1 },
+    .barrier        = true
   };
 
   ComputeCommand cmd3{
     .pipeline       = pipeline,
     .descriptor_set = set,
     .push_constants = { 8, 0, 0, 0 },
-    .barrier        = true,
-    .work_groups    = { 32, 1, 1 }
+    .work_groups    = { 32, 1, 1 },
+    .barrier        = true
   };
 
   engine.compute_command(cmd1);

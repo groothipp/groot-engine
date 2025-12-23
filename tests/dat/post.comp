@@ -1,0 +1,23 @@
+#version 460
+
+layout(binding = 0, rgba8) uniform image2D _RenderTarget;
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+void main() {
+  uvec2 index = gl_GlobalInvocationID.xy;
+  uvec2 dims = uvec2(imageSize(_RenderTarget));
+  if (!all(lessThan(index, dims))) return;
+
+  vec2 uv = (vec2(index) + 0.5) / vec2(dims);
+  vec2 ndc = 2.0 * uv - 1.0;
+  ndc.x *= float(dims.x) / float(dims.y);
+  ndc.y *= -1;
+
+  if (length(ndc) > 1.0) return;
+
+  vec4 base_color = imageLoad(_RenderTarget, ivec2(index));
+  vec4 color = vec4(uv, 0.0, 0.5) * base_color;
+
+  imageStore(_RenderTarget, ivec2(index), color);
+}
