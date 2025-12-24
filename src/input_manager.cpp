@@ -22,7 +22,11 @@ void InputManager::keyCallback(GLFWwindow * window, int key, int, int action, in
 
 void InputManager::cursorCallback(GLFWwindow * window, double x, double y) {
   InputManager * inputManager = static_cast<InputManager *>(glfwGetWindowUserPointer(window));
-  inputManager->m_cursor = std::make_pair(x, y);
+
+  float xScale, yScale;
+  glfwGetWindowContentScale(window, &xScale, &yScale);
+
+  inputManager->m_cursor = std::make_pair(x * xScale, y * yScale);
 }
 
 void InputManager::mouseCallback(GLFWwindow * window, int button, int action, int) {
