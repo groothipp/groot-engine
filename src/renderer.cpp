@@ -4,7 +4,6 @@
 #include "src/include/renderer.hpp"
 #include "src/include/structs.hpp"
 #include "src/include/vulkan_context.hpp"
-#include "vulkan/vulkan.hpp"
 
 #include <GLFW/glfw3.h>
 
@@ -42,7 +41,7 @@ Renderer::Renderer(
     .imageColorSpace  = m_colorFormat.colorSpace,
     .imageExtent      = m_extent,
     .imageArrayLayers = 1,
-    .imageUsage       = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eStorage,
+    .imageUsage       = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eTransferDst,
     .presentMode      = m_presentMode
   };
 
@@ -50,6 +49,8 @@ Renderer::Renderer(
   m_images = context->device().getSwapchainImagesKHR(m_swapchain);
 
   vk::CommandBuffer cmdBuf = context->beginTransfer();
+  m_drawImages.reserve(m_images.size());
+  m_drawViews.reserve(m_images.size());
   for (const auto& image : m_images) {
     m_views.emplace_back(context->device().createImageView(vk::ImageViewCreateInfo{
       .image    = image,
@@ -62,10 +63,39 @@ Renderer::Renderer(
       }
     }));
 
-    vk::ImageMemoryBarrier barrier{
-      .srcAccessMask = vk::AccessFlagBits::eNone,
-      .dstAccessMask = vk::AccessFlagBits::eNone,
-      .oldLayout  = vk::ImageLayout::eUndefined,
+    m_drawImages.emplace_back(allocator->allocateImage(vk::ImageCreateInfo{
+      .imageType    = vk::ImageType::e2D,
+      .format       = m_colorFormat.format,
+      .extent       = { m_extent.width, m_extent.height, 1 },
+      .mipLevels    = 1,
+      .arrayLayers  = 1,
+      .samples      = vk::SampleCountFlagBits::e1,
+      .tiling       = vk::ImageTiling::eOptimal,
+      .usage        = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eTransferSrc,
+    }));
+
+    m_drawViews.emplace_back(context->device().createImageView(vk::ImageViewCreateInfo{
+      .image    = m_drawImages.back(),
+      .viewType = vk::ImageViewType::e2D,
+      .format   = m_colorFormat.format,
+      .subresourceRange = {
+        .aspectMask = vk::ImageAspectFlagBits::eColor,
+        .levelCount = 1,
+        .layerCount = 1
+      }
+    }));
+
+    vk::ImageMemoryBarrier drawBarrier{
+      .newLayout  = vk::ImageLayout::eGeneral,
+      .image      = m_drawImages.back(),
+      .subresourceRange = {
+        .aspectMask = vk::ImageAspectFlagBits::eColor,
+        .levelCount = 1,
+        .layerCount = 1
+      }
+    };
+
+    vk::ImageMemoryBarrier renderBarrier{
       .newLayout  = vk::ImageLayout::ePresentSrcKHR,
       .image      = image,
       .subresourceRange = {
@@ -81,7 +111,7 @@ Renderer::Renderer(
       vk::DependencyFlags(),
       nullptr,
       nullptr,
-      barrier
+      { drawBarrier, renderBarrier }
     );
   }
   context->endTransfer(cmdBuf);
@@ -138,11 +168,10 @@ unsigned int Renderer::prepFrame(const vk::Device& device) const {
   m_cmds[m_frameIndex].begin(vk::CommandBufferBeginInfo{});
 
   vk::ImageMemoryBarrier barrier{
-    .srcAccessMask = vk::AccessFlagBits::eNone,
-    .dstAccessMask = vk::AccessFlagBits::eColorAttachmentWrite | vk::AccessFlagBits::eColorAttachmentRead,
-    .oldLayout      = vk::ImageLayout::ePresentSrcKHR,
+    .dstAccessMask  = vk::AccessFlagBits::eColorAttachmentWrite,
+    .oldLayout      = vk::ImageLayout::eGeneral,
     .newLayout      = vk::ImageLayout::eColorAttachmentOptimal,
-    .image          = m_images[imgIndex],
+    .image          = m_drawImages[imgIndex],
     .subresourceRange = {
       .aspectMask = vk::ImageAspectFlagBits::eColor,
       .levelCount = 1,
@@ -151,9 +180,9 @@ unsigned int Renderer::prepFrame(const vk::Device& device) const {
   };
 
   m_cmds[m_frameIndex].pipelineBarrier(
-    vk::PipelineStageFlagBits::eAllCommands,
-    vk::PipelineStageFlagBits::eAllCommands,
-    vk::DependencyFlags{},
+    vk::PipelineStageFlagBits::eTopOfPipe,
+    vk::PipelineStageFlagBits::eColorAttachmentOutput,
+    vk::DependencyFlags(),
     nullptr,
     nullptr,
     barrier
@@ -166,8 +195,12 @@ const vk::CommandBuffer& Renderer::renderBuffer() const {
   return m_cmds[m_frameIndex];
 }
 
-std::pair<const vk::Image&, const vk::ImageView&> Renderer::target(unsigned int index) const {
+std::pair<const vk::Image&, const vk::ImageView&> Renderer::renderTarget(unsigned int index) const {
   return { m_images[index], m_views[index] };
+}
+
+std::pair<const vk::Image&, const vk::ImageView&> Renderer::drawTarget(unsigned int index) const {
+  return { m_drawImages[index], m_drawViews[index] };
 }
 
 void Renderer::render(
@@ -177,39 +210,39 @@ void Renderer::render(
   unsigned int imgIndex
 ) {
   vk::RenderingAttachmentInfo color{
-      .imageView    = m_views[imgIndex],
-      .imageLayout  = vk::ImageLayout::eColorAttachmentOptimal,
-      .loadOp       = vk::AttachmentLoadOp::eClear,
-      .storeOp      = vk::AttachmentStoreOp::eStore,
-      .clearValue   = { m_clearColor }
-    };
+    .imageView    = m_drawViews[imgIndex],
+    .imageLayout  = vk::ImageLayout::eColorAttachmentOptimal,
+    .loadOp       = vk::AttachmentLoadOp::eClear,
+    .storeOp      = vk::AttachmentStoreOp::eStore,
+    .clearValue   = { m_clearColor }
+  };
 
-    vk::RenderingAttachmentInfo depth{
-      .imageView    = m_depthView,
-      .imageLayout  = vk::ImageLayout::eDepthAttachmentOptimal,
-      .loadOp       = vk::AttachmentLoadOp::eClear,
-      .storeOp      = vk::AttachmentStoreOp::eDontCare,
-      .clearValue   = { .depthStencil = { 1, 0 } }
-    };
+  vk::RenderingAttachmentInfo depth{
+    .imageView    = m_depthView,
+    .imageLayout  = vk::ImageLayout::eDepthAttachmentOptimal,
+    .loadOp       = vk::AttachmentLoadOp::eClear,
+    .storeOp      = vk::AttachmentStoreOp::eDontCare,
+    .clearValue   = { .depthStencil = { 1, 0 } }
+  };
 
-    m_cmds[m_frameIndex].beginRendering(vk::RenderingInfo{
-      .renderArea           = { .extent = m_extent },
-      .layerCount           = 1,
-      .colorAttachmentCount = 1,
-      .pColorAttachments    = &color,
-      .pDepthAttachment     = &depth
-    });
+  m_cmds[m_frameIndex].beginRendering(vk::RenderingInfo{
+    .renderArea           = { .extent = m_extent },
+    .layerCount           = 1,
+    .colorAttachmentCount = 1,
+    .pColorAttachments    = &color,
+    .pDepthAttachment     = &depth
+  });
 
-    m_cmds[m_frameIndex].setViewport(0, vk::Viewport{
-      .x        = 0,
-      .y        = 0,
-      .width    = static_cast<float>(m_extent.width),
-      .height   = static_cast<float>(m_extent.height),
-      .minDepth = 0,
-      .maxDepth = 1
-    });
+  m_cmds[m_frameIndex].setViewport(0, vk::Viewport{
+    .x        = 0,
+    .y        = 0,
+    .width    = static_cast<float>(m_extent.width),
+    .height   = static_cast<float>(m_extent.height),
+    .minDepth = 0,
+    .maxDepth = 1
+  });
 
-    m_cmds[m_frameIndex].setScissor(0, vk::Rect2D{ .extent = m_extent });
+  m_cmds[m_frameIndex].setScissor(0, vk::Rect2D{ .extent = m_extent });
 
   for (const auto& object : scene) {
     PipelineHandle * pipeline = reinterpret_cast<PipelineHandle *>(resources.at(object.m_pipeline));
@@ -271,6 +304,12 @@ void Renderer::destroy(const VulkanContext * context, Allocator * allocator) {
   allocator->destroyImage(m_depthImage);
 
   for (const auto& view : m_views)
+    context->device().destroyImageView(view);
+
+  for (const auto& image : m_drawImages)
+    allocator->destroyImage(image);
+
+  for (const auto& view : m_drawViews)
     context->device().destroyImageView(view);
 
   context->device().destroySwapchainKHR(m_swapchain);

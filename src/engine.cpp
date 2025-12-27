@@ -8,6 +8,7 @@
 #include "src/include/structs.hpp"
 #include "src/include/tiny_obj_loader.h"
 #include "src/include/vulkan_context.hpp"
+#include "vulkan/vulkan.hpp"
 
 #include <GLFW/glfw3.h>
 
@@ -221,21 +222,29 @@ void Engine::run(std::function<void(double)> code) {
     glfwPollEvents();
 
     unsigned int imgIndex = m_renderer->prepFrame(m_context->device());
-    auto [image, view] = m_renderer->target(imgIndex);
+    auto [drawImage, drawView] = m_renderer->drawTarget(imgIndex);
+    auto [renderImage, renderView] = m_renderer->renderTarget(imgIndex);
+
+    m_drawOutput = new ImageHandle;
+    m_drawOutput->image = drawImage;
+    m_drawOutput->view = drawView;
 
     m_renderTarget = new ImageHandle;
-    m_renderTarget->image = image;
-    m_renderTarget->view = view;
+    m_renderTarget->image = renderImage;
+    m_renderTarget->view = renderView;
 
     transitionImagesCompute();
     code(m_frameTime);
 
     transitionImagesGraphics(m_renderer->renderBuffer());
     m_renderer->render(m_context, m_scene, m_resources, imgIndex);
+    blit();
 
     postProcess();
 
     m_renderer->submit(m_context, imgIndex);
+
+    delete m_drawOutput;
     delete m_renderTarget;
   }
 
@@ -910,7 +919,27 @@ RID Engine::create_descriptor_set(const std::vector<RID>& descriptors) {
             .type = vk::DescriptorType::eStorageImage
           });
         }
-        ++poolSizes[imagePoolIndex].descriptorCount;
+        poolSizes[imagePoolIndex].descriptorCount += 2;
+
+        bindings.emplace_back(vk::DescriptorSetLayoutBinding{
+          .binding          = binding,
+          .descriptorType   = vk::DescriptorType::eStorageImage,
+          .descriptorCount  = 1,
+          .stageFlags       = vk::ShaderStageFlagBits::eAll
+        });
+
+        imageInfos.emplace_back(vk::DescriptorImageInfo{
+          .imageView    = m_drawOutput->view,
+          .imageLayout  = vk::ImageLayout::eGeneral
+        });
+
+        writes.emplace_back(vk::WriteDescriptorSet{
+          .dstSet           = nullptr,
+          .dstBinding       = binding++,
+          .descriptorCount  = 1,
+          .descriptorType   = vk::DescriptorType::eStorageImage,
+          .pImageInfo       = &imageInfos.back()
+        });
 
         bindings.emplace_back(vk::DescriptorSetLayoutBinding{
           .binding          = binding,
@@ -1700,7 +1729,7 @@ void Engine::postProcess() {
 
     vk::ImageMemoryBarrier barrier{
       .srcAccessMask  = vk::AccessFlagBits::eShaderWrite,
-      .oldLayout      = vk::ImageLayout::eColorAttachmentOptimal,
+      .oldLayout      = vk::ImageLayout::eGeneral,
       .newLayout      = vk::ImageLayout::ePresentSrcKHR,
       .image          = m_renderTarget->image,
       .subresourceRange = {
@@ -1723,33 +1752,7 @@ void Engine::postProcess() {
     return;
   }
 
-  vk::CommandBuffer cmdBuf = m_context->beginDispatch();
-
-  vk::ImageMemoryBarrier barrier{
-    .srcAccessMask  = vk::AccessFlagBits::eColorAttachmentWrite,
-    .dstAccessMask  = vk::AccessFlagBits::eShaderWrite,
-    .oldLayout      = vk::ImageLayout::eColorAttachmentOptimal,
-    .newLayout      = vk::ImageLayout::eGeneral,
-    .image          = m_renderTarget->image,
-    .subresourceRange = {
-      .aspectMask = vk::ImageAspectFlagBits::eColor,
-      .levelCount = 1,
-      .layerCount = 1
-    }
-  };
-
-  cmdBuf.pipelineBarrier(
-    vk::PipelineStageFlagBits::eColorAttachmentOutput,
-    vk::PipelineStageFlagBits::eComputeShader,
-    vk::DependencyFlags(),
-    nullptr,
-    nullptr,
-    barrier
-  );
-
-  m_context->endDispatch(cmdBuf);
-
-  cmdBuf = nullptr;
+  vk::CommandBuffer cmdBuf = nullptr;
   std::vector<RID> rids;
   while (!m_postProcessCmds.empty()) {
     ComputeCommand cmd = m_postProcessCmds.front();
@@ -1793,9 +1796,8 @@ void Engine::postProcess() {
     rids.emplace_back(cmd.descriptor_set);
   }
 
-  barrier = vk::ImageMemoryBarrier{
-    .srcAccessMask  = vk::AccessFlagBits::eColorAttachmentWrite,
-    .dstAccessMask  = vk::AccessFlagBits::eShaderWrite,
+  vk::ImageMemoryBarrier barrier = vk::ImageMemoryBarrier{
+    .srcAccessMask  = vk::AccessFlagBits::eShaderWrite,
     .oldLayout      = vk::ImageLayout::eGeneral,
     .newLayout      = vk::ImageLayout::ePresentSrcKHR,
     .image          = m_renderTarget->image,
@@ -1807,8 +1809,8 @@ void Engine::postProcess() {
   };
 
   cmdBuf.pipelineBarrier(
-    vk::PipelineStageFlagBits::eColorAttachmentOutput,
     vk::PipelineStageFlagBits::eComputeShader,
+    vk::PipelineStageFlagBits::eBottomOfPipe,
     vk::DependencyFlags(),
     nullptr,
     nullptr,
@@ -1827,6 +1829,82 @@ void Engine::postProcess() {
       default: break;
     }
   }
+}
+
+void Engine::blit() {
+  vk::CommandBuffer cmd = m_context->beginTransfer();
+
+  vk::ImageMemoryBarrier drawBarrier{
+    .dstAccessMask  = vk::AccessFlagBits::eTransferWrite,
+    .oldLayout      = vk::ImageLayout::eColorAttachmentOptimal,
+    .newLayout      = vk::ImageLayout::eTransferSrcOptimal,
+    .image          = m_drawOutput->image,
+    .subresourceRange = {
+      .aspectMask = vk::ImageAspectFlagBits::eColor,
+      .levelCount = 1,
+      .layerCount = 1
+    }
+  };
+
+  vk::ImageMemoryBarrier renderBarrier{
+    .dstAccessMask  = vk::AccessFlagBits::eTransferRead,
+    .oldLayout      = vk::ImageLayout::ePresentSrcKHR,
+    .newLayout      = vk::ImageLayout::eTransferDstOptimal,
+    .image          = m_renderTarget->image,
+    .subresourceRange = {
+      .aspectMask = vk::ImageAspectFlagBits::eColor,
+      .levelCount = 1,
+      .layerCount = 1
+    }
+  };
+
+  cmd.pipelineBarrier(
+    vk::PipelineStageFlagBits::eColorAttachmentOutput,
+    vk::PipelineStageFlagBits::eTransfer,
+    vk::DependencyFlags(),
+    nullptr,
+    nullptr,
+    { drawBarrier, renderBarrier }
+  );
+
+  auto [width, height] = m_renderer->extent();
+
+  cmd.copyImage(
+    m_drawOutput->image, vk::ImageLayout::eTransferSrcOptimal,
+    m_renderTarget->image, vk::ImageLayout::eTransferDstOptimal,
+    vk::ImageCopy{
+      .srcSubresource = {
+        .aspectMask = vk::ImageAspectFlagBits::eColor,
+        .layerCount = 1,
+      },
+      .dstSubresource = {
+        .aspectMask = vk::ImageAspectFlagBits::eColor,
+        .layerCount = 1
+      },
+      .extent = { width, height, 1 }
+    }
+  );
+
+  drawBarrier.srcAccessMask = vk::AccessFlagBits::eTransferRead;
+  drawBarrier.dstAccessMask = vk::AccessFlagBits::eShaderRead;
+  drawBarrier.oldLayout = vk::ImageLayout::eTransferSrcOptimal;
+  drawBarrier.newLayout = vk::ImageLayout::eGeneral;
+
+  renderBarrier.srcAccessMask = vk::AccessFlagBits::eTransferWrite;
+  renderBarrier.dstAccessMask = vk::AccessFlagBits::eShaderWrite;
+  renderBarrier.oldLayout = vk::ImageLayout::eTransferDstOptimal;
+  renderBarrier.newLayout = vk::ImageLayout::eGeneral;
+
+  cmd.pipelineBarrier(
+    vk::PipelineStageFlagBits::eTransfer,
+    vk::PipelineStageFlagBits::eComputeShader,
+    vk::DependencyFlags(),
+    nullptr,
+    nullptr,
+    { drawBarrier, renderBarrier }
+  );
+
+  m_context->endTransfer(cmd);
 }
 
 } // namespace groot

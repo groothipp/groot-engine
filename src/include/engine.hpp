@@ -38,6 +38,7 @@ class alignas(64) Engine {
 
   std::queue<ComputeCommand> m_computeCmds;
   std::queue<ComputeCommand> m_postProcessCmds;
+  ImageHandle * m_drawOutput = nullptr;
   ImageHandle * m_renderTarget = nullptr;
 
   std::set<Object> m_scene;
@@ -147,6 +148,7 @@ class alignas(64) Engine {
     void transitionImagesCompute() const;
     void transitionImagesGraphics(const vk::CommandBuffer&) const;
     void postProcess();
+    void blit();
 };
 
 } // namespace groot

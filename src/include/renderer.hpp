@@ -26,6 +26,8 @@ class Renderer {
   vk::SwapchainKHR m_swapchain = nullptr;
   std::vector<vk::Image> m_images;
   std::vector<vk::ImageView> m_views;
+  std::vector<vk::Image> m_drawImages;
+  std::vector<vk::ImageView> m_drawViews;
   vk::Image m_depthImage = nullptr;
   vk::ImageView m_depthView = nullptr;
 
@@ -52,7 +54,8 @@ class Renderer {
     std::pair<unsigned int, unsigned int> extent() const;
     unsigned int prepFrame(const vk::Device&) const;
     const vk::CommandBuffer& renderBuffer() const;
-    std::pair<const vk::Image&, const vk::ImageView&> target(unsigned int) const;
+    std::pair<const vk::Image&, const vk::ImageView&> renderTarget(unsigned int) const;
+    std::pair<const vk::Image&, const vk::ImageView&> drawTarget(unsigned int) const;
 
     void render(
       const VulkanContext *,
