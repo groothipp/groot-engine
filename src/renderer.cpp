@@ -284,8 +284,6 @@ Renderer::Renderer(
 
   ImGui_ImplVulkan_Init(&guiInitInfo);
 
-  m_postProcessResources.resize(m_flightFrames);
-
   if (context->device().waitForFences(transferFence, true, 1000000000) != vk::Result::eSuccess)
     Log::runtime_error("Hung waiting for swapchain image transitions");
 
@@ -354,33 +352,6 @@ void Renderer::prepFrame(const VulkanContext * context, std::unordered_map<RID, 
   if (context->device().waitForFences(flightFence, true, 1000000000) != vk::Result::eSuccess)
     Log::runtime_error("Hung waiting for new frame");
   context->device().resetFences(flightFence);
-
-
-  std::vector<RID>& resourcesToDestroy = m_postProcessResources[m_frameIndex];
-  for (auto& resource : resourcesToDestroy) {
-    switch (resource.m_type) {
-      case ResourceType::Pipeline: {
-        PipelineHandle * pipeline = reinterpret_cast<PipelineHandle *>(resources.at(resource));
-
-        context->device().destroyPipeline(pipeline->pipeline);
-        context->device().destroyPipelineLayout(pipeline->layout);
-
-        delete pipeline;
-        break;
-      }
-      case ResourceType::DescriptorSet: {
-        DescriptorSetHandle * set = reinterpret_cast<DescriptorSetHandle *>(resources.at(resource));
-
-        context->device().destroyDescriptorSetLayout(set->layout);
-        context->device().destroyDescriptorPool(set->pool);
-
-        delete set;
-      }
-      default: break;
-    }
-    resources.erase(resource);
-  }
-  resourcesToDestroy.clear();
 }
 
 void Renderer::dispatch(
@@ -429,12 +400,6 @@ void Renderer::dispatch(
 
   auto [group_x, group_y, group_z] = command.work_groups;
   cmd.dispatch(group_x, group_y, group_z);
-
-  if (!m_preDraw) {
-    std::vector<RID>& resources = m_postProcessResources[m_frameIndex];
-    resources.emplace_back(command.pipeline);
-    resources.emplace_back(command.descriptor_set);
-  }
 }
 
 void Renderer::beginDispatch(const VulkanContext * context, const std::set<unsigned long>& imageHandles) {

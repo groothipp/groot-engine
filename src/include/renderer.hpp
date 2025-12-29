@@ -46,8 +46,6 @@ class Renderer {
   std::vector<vk::Semaphore> m_postProcessSemaphores;
   std::vector<vk::Semaphore> m_uiSemaphores;
 
-  std::vector<std::vector<RID>> m_postProcessResources;
-
   unsigned int m_flightFrames = 0;
   unsigned int m_frameIndex = 0;
   bool m_preDraw = false;
