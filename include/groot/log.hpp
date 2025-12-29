@@ -19,6 +19,7 @@ class Log {
     static void warn(const std::string&);
     static void runtime_error(const std::string&);
     static void out_of_range(const std::string&);
+    static void bad_cast();
 };
 
 } // namespace groot

@@ -1,7 +1,5 @@
 #pragma once
 
-#include "src/include/structs.hpp"
-
 #include <vulkan/vulkan.hpp>
 
 class GLFWwindow;
@@ -24,6 +22,8 @@ class VulkanContext {
   vk::CommandPool m_computeCmdPool = nullptr;
   vk::CommandPool m_graphicsCmdPool = nullptr;
 
+  vk::DescriptorPool m_guiDescriptorPool = nullptr;
+
   public:
     VulkanContext(const std::string&, const unsigned int&);
     VulkanContext(const VulkanContext&) = delete;
@@ -39,19 +39,19 @@ class VulkanContext {
     const vk::PhysicalDevice& gpu() const;
     const vk::Device& device() const;
     const vk::SurfaceKHR& surface() const;
+    std::pair<unsigned int, const vk::Queue&> graphicsQueue() const;
+    std::pair<unsigned int, const vk::Queue&> presentQueue() const;
+    std::pair<unsigned int, const vk::Queue&> transferQueue() const;
+    std::pair<unsigned int, const vk::Queue&> computeQueue() const;
+    std::vector<vk::CommandBuffer> graphicsCmds(unsigned int) const;
+    std::vector<vk::CommandBuffer> transferCmds(unsigned int) const;
+    std::vector<vk::CommandBuffer> computeCmds(unsigned int) const;
+    void destroyGraphicsCmds(std::vector<vk::CommandBuffer>&) const;
+    void destroyTransferCmds(std::vector<vk::CommandBuffer>&) const;
+    void destroyComputeCmds(std::vector<vk::CommandBuffer>&) const;
     bool supportsTesselation() const;
     bool supportsNonSolidMesh() const;
     bool supportsAnisotropy() const;
-    vk::CommandBuffer beginTransfer() const;
-    void endTransfer(const vk::CommandBuffer&) const;
-    vk::CommandBuffer beginDispatch() const;
-    void endDispatch(const vk::CommandBuffer&) const;
-    std::vector<vk::CommandBuffer> createRenderBuffers(unsigned int) const;
-    std::vector<vk::Fence> createFlightFences(unsigned int) const;
-    std::vector<vk::Semaphore> createRenderSemaphores(unsigned int) const;
-    void destroyRenderBuffers(std::vector<vk::CommandBuffer>&) const;
-    void submitRender(const RenderInfo&) const;
-    void presentRender(const PresentInfo&) const;
 
     void createSurface(GLFWwindow *);
     void chooseGPU(const unsigned int&, const std::vector<const char *>&);

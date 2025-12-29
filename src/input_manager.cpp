@@ -1,11 +1,18 @@
+#include "imgui_impl_glfw.h"
 #include "src/include/enums.hpp"
 #include "src/include/input_mananger.hpp"
 
 #include <GLFW/glfw3.h>
+#include <imgui.h>
 
 namespace groot {
 
-void InputManager::keyCallback(GLFWwindow * window, int key, int, int action, int) {
+void InputManager::keyCallback(GLFWwindow * window, int key, int scancode, int action, int mods) {
+  ImGui_ImplGlfw_KeyCallback(window, key, scancode, action, mods);
+
+  ImGuiIO& io = ImGui::GetIO();
+  if (io.WantCaptureKeyboard) return;
+
   InputManager * inputManager = static_cast<InputManager *>(glfwGetWindowUserPointer(window));
 
   Key k = static_cast<Key>(key);
@@ -21,6 +28,11 @@ void InputManager::keyCallback(GLFWwindow * window, int key, int, int action, in
 }
 
 void InputManager::cursorCallback(GLFWwindow * window, double x, double y) {
+  ImGui_ImplGlfw_CursorPosCallback(window, x, y);
+
+  ImGuiIO& io = ImGui::GetIO();
+  if (io.WantSetMousePos) return;
+
   InputManager * inputManager = static_cast<InputManager *>(glfwGetWindowUserPointer(window));
 
   float xScale, yScale;
@@ -29,7 +41,12 @@ void InputManager::cursorCallback(GLFWwindow * window, double x, double y) {
   inputManager->m_cursor = std::make_pair(x * xScale, y * yScale);
 }
 
-void InputManager::mouseCallback(GLFWwindow * window, int button, int action, int) {
+void InputManager::mouseCallback(GLFWwindow * window, int button, int action, int mods) {
+  ImGui_ImplGlfw_MouseButtonCallback(window, button, action, mods);
+
+  ImGuiIO& io = ImGui::GetIO();
+  if (io.WantCaptureMouse) return;
+
   InputManager * inputManager = static_cast<InputManager *>(glfwGetWindowUserPointer(window));
 
   MouseButton b = static_cast<MouseButton>(button);

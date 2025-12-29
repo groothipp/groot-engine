@@ -6,8 +6,6 @@
 
 #include <vulkan/vulkan.hpp>
 
-#include <cstdint>
-
 namespace groot {
 
 struct VkBufferHash {
@@ -77,10 +75,9 @@ struct SamplerSettings {
 struct ComputeCommand {
   RID pipeline = RID();
   RID descriptor_set = RID();
-  std::vector<uint8_t> push_constants;
+  std::vector<unsigned char> push_constants;
   std::tuple<unsigned int, unsigned int, unsigned int> work_groups = { 1, 1, 1 };
   bool barrier = false;
-  bool post_process = false;
 };
 
 struct Vertex {
@@ -110,19 +107,6 @@ struct Transform {
   vec3 scale = vec3(1.0f);
 
   mat4 matrix() const;
-};
-
-struct RenderInfo {
-  vk::CommandBuffer cmdBuf = nullptr;
-  vk::Fence fence = nullptr;
-  vk::Semaphore imageSemaphore = nullptr;
-  vk::Semaphore renderSemaphore = nullptr;
-};
-
-struct PresentInfo {
-  vk::SwapchainKHR swapchain = nullptr;
-  unsigned int imgIndex = 0;
-  vk::Semaphore renderSemaphore = nullptr;
 };
 
 } // namespace groot

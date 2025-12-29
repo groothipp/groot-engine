@@ -9,10 +9,29 @@ find_library(SPIRV_LIB NAMES SPIRV REQUIRED)
 find_library(SPIRV_TOOLS_LIB NAMES SPIRV-Tools REQUIRED)
 find_library(SPIRV_TOOLS_OPT_LIB NAMES SPIRV-Tools-opt REQUIRED)
 
+# ImGui setup
+set(IMGUI_DIR ${CMAKE_SOURCE_DIR}/imgui)
+set(IMGUI_SOURCES
+  ${IMGUI_DIR}/imgui.cpp
+  ${IMGUI_DIR}/imgui_demo.cpp
+  ${IMGUI_DIR}/imgui_draw.cpp
+  ${IMGUI_DIR}/imgui_tables.cpp
+  ${IMGUI_DIR}/imgui_widgets.cpp
+  ${IMGUI_DIR}/backends/imgui_impl_glfw.cpp
+  ${IMGUI_DIR}/backends/imgui_impl_vulkan.cpp
+)
+set(IMGUI_HEADERS
+  ${IMGUI_DIR}/imgui.h
+  ${IMGUI_DIR}/imconfig.h
+  ${IMGUI_DIR}/backends/imgui_impl_glfw.h
+  ${IMGUI_DIR}/backends/imgui_impl_vulkan.h
+)
+
 set(ENGINE_INCLUDES
   ${CMAKE_CURRENT_SOURCE_DIR}/include/allocator.hpp
   ${CMAKE_CURRENT_SOURCE_DIR}/include/engine.hpp
   ${CMAKE_CURRENT_SOURCE_DIR}/include/enums.hpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/gui.hpp
   ${CMAKE_CURRENT_SOURCE_DIR}/include/input_manager.hpp
   ${CMAKE_CURRENT_SOURCE_DIR}/include/linalg.hpp
   ${CMAKE_CURRENT_SOURCE_DIR}/include/log.hpp
@@ -29,6 +48,7 @@ set(ENGINE_INCLUDES
 set(ENGINE_SOURCES
   ${CMAKE_CURRENT_SOURCE_DIR}/allocator.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/engine.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/gui.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/input_manager.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/linalg.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/log.cpp
@@ -41,12 +61,14 @@ set(ENGINE_SOURCES
   ${CMAKE_CURRENT_SOURCE_DIR}/tiny_obj_loader.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/vma.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/vulkan_context.cpp
+  ${IMGUI_SOURCES}
 )
 
 set(PUBLIC_HEADERS
   ${CMAKE_SOURCE_DIR}/include/groot/engine.hpp
   ${CMAKE_SOURCE_DIR}/include/groot/enums.hpp
   ${CMAKE_SOURCE_DIR}/include/groot/groot.hpp
+  ${CMAKE_SOURCE_DIR}/include/groot/gui.hpp
   ${CMAKE_SOURCE_DIR}/include/groot/linalg.hpp
   ${CMAKE_SOURCE_DIR}/include/groot/log.hpp
   ${CMAKE_SOURCE_DIR}/include/groot/object.hpp
@@ -61,7 +83,11 @@ set_source_files_properties(
 
 add_library(groot ${ENGINE_SOURCES})
 
-target_include_directories(groot PRIVATE ${CMAKE_SOURCE_DIR})
+target_include_directories(groot PRIVATE
+  ${CMAKE_SOURCE_DIR}
+  ${IMGUI_DIR}
+  ${IMGUI_DIR}/backends
+)
 
 target_compile_definitions(groot PRIVATE
   "GLFW_INCLUDE_NONE"

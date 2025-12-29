@@ -1,13 +1,13 @@
 #pragma once
 
 #include "src/include/enums.hpp"
+#include "src/include/gui.hpp"
 #include "src/include/rid.hpp"
 #include "src/include/structs.hpp"
 
 #include <string>
 #include <unordered_map>
 #include <functional>
-#include <queue>
 #include <set>
 #include <vector>
 
@@ -36,14 +36,14 @@ class alignas(64) Engine {
   std::set<RID> m_busySamplers;
   std::set<unsigned long> m_storageTextures;
 
-  std::queue<ComputeCommand> m_computeCmds;
-  std::queue<ComputeCommand> m_postProcessCmds;
   ImageHandle * m_drawOutput = nullptr;
   ImageHandle * m_renderTarget = nullptr;
 
   std::set<Object> m_scene;
   vec3 m_cameraEye = vec3(0.0f, 0.0f, 2.0f);
   vec3 m_cameraTarget = vec3(0.0f);
+
+  std::unordered_map<std::string, GUI> m_guis;
 
   double m_frameTime = 0.0;
   double m_time = 0.0;
@@ -76,7 +76,7 @@ class alignas(64) Engine {
     RID render_target();
     void translate_camera(const vec3&);
     void rotate_camera(float, float);
-    void run(std::function<void(double)> code = [](double){});
+    void run(std::function<void(double)> pre_draw = [](double){}, std::function<void(double)> post_draw = [](double){});
 
     RID create_uniform_buffer(unsigned int);
     RID create_storage_buffer(unsigned int);
@@ -135,20 +135,23 @@ class alignas(64) Engine {
     RID load_mesh(const std::string&);
     void destroy_mesh(RID&);
 
-    void compute_command(const ComputeCommand&);
-    void dispatch();
+    void dispatch(const ComputeCommand&);
 
     void add_to_scene(Object&);
     void remove_from_scene(Object&);
+
+    void add_gui(const std::string&, GUI&&);
+    void toggle_gui(const std::string&);
+
+    template<typename T>
+    inline std::unique_ptr<T>& get_gui_element(const std::string& gui, const std::string& element) {
+      return m_guis.at(gui).get_element<T>(element);
+    }
 
   private:
     void updateTimes();
     std::pair<unsigned int, void *> readBufferRaw(const RID&) const;
     void writeBufferRaw(const RID&, std::size_t, const void *) const;
-    void transitionImagesCompute() const;
-    void transitionImagesGraphics(const vk::CommandBuffer&) const;
-    void postProcess();
-    void blit();
 };
 
 } // namespace groot

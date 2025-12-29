@@ -27,7 +27,8 @@ TEST_CASE( "compute dispatch" ) {
     .pipeline       = pipeline,
     .descriptor_set = set,
     .push_constants = { 15, 0, 0, 0 },
-    .work_groups    = { 32, 1, 1 }
+    .work_groups    = { 32, 1, 1 },
+    .barrier        = true
   };
 
   ComputeCommand cmd2{
@@ -43,13 +44,14 @@ TEST_CASE( "compute dispatch" ) {
     .descriptor_set = set,
     .push_constants = { 8, 0, 0, 0 },
     .work_groups    = { 32, 1, 1 },
-    .barrier        = true
   };
 
-  engine.compute_command(cmd1);
-  engine.compute_command(cmd2);
-  engine.compute_command(cmd3);
-  engine.dispatch();
+  engine.run([&engine, &cmd1, &cmd2, &cmd3](double){
+    engine.dispatch(cmd2);
+    engine.dispatch(cmd1);
+    engine.dispatch(cmd3);
+    engine.close_window();
+  });
 
   std::vector<int> nums = engine.read_buffer<int>(buffer);
 
@@ -73,12 +75,14 @@ TEST_CASE( "invalid dispatch operations" ) {
     REQUIRE( set.is_valid() );
 
     RID pipeline;
-    engine.compute_command(ComputeCommand{
-      .pipeline = pipeline,
-      .descriptor_set = set
-    });
 
-    engine.dispatch();
+    engine.run([&engine, &pipeline, &set](double){
+      engine.dispatch(ComputeCommand{
+        .pipeline = pipeline,
+        .descriptor_set = set
+      });
+      engine.close_window();
+    });
 
     CHECK( true );
   }
@@ -92,12 +96,13 @@ TEST_CASE( "invalid dispatch operations" ) {
     RID set = engine.create_descriptor_set({ buffer });
     REQUIRE( set.is_valid() );
 
-    engine.compute_command(ComputeCommand{
-      .pipeline = buffer,
-      .descriptor_set = set
+    engine.run([&engine, &buffer, &set](double){
+      engine.dispatch(ComputeCommand{
+        .pipeline = buffer,
+        .descriptor_set = set
+      });
+      engine.close_window();
     });
-
-    engine.dispatch();
 
     CHECK( true );
   }
@@ -115,12 +120,14 @@ TEST_CASE( "invalid dispatch operations" ) {
     REQUIRE( pipeline.is_valid() );
 
     RID rid;
-    engine.compute_command(ComputeCommand{
-      .pipeline = pipeline,
-      .descriptor_set = rid
-    });
 
-    engine.dispatch();
+    engine.run([&engine, &pipeline, &rid](double){
+      engine.dispatch(ComputeCommand{
+        .pipeline = pipeline,
+        .descriptor_set = rid
+      });
+      engine.close_window();
+    });
 
     CHECK( true );
   }
@@ -137,12 +144,13 @@ TEST_CASE( "invalid dispatch operations" ) {
     RID pipeline = engine.create_compute_pipeline(shader, set);
     REQUIRE( pipeline.is_valid() );
 
-    engine.compute_command(ComputeCommand{
-      .pipeline = pipeline,
-      .descriptor_set = shader
+    engine.run([&engine, &pipeline, &shader](double){
+      engine.dispatch(ComputeCommand{
+        .pipeline = pipeline,
+        .descriptor_set = shader
+      });
+      engine.close_window();
     });
-
-    engine.dispatch();
 
     CHECK( true );
   }

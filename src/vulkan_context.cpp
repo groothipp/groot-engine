@@ -1,4 +1,5 @@
 #include "src/include/log.hpp"
+#include "vulkan/vulkan.hpp"
 #include "src/include/vulkan_context.hpp"
 
 #include <vulkan/vulkan_beta.h>
@@ -58,6 +59,7 @@ VulkanContext::VulkanContext(const std::string& applicationName, const unsigned 
 }
 
 VulkanContext::~VulkanContext() {
+  m_device.destroyDescriptorPool(m_guiDescriptorPool);
   m_device.destroyCommandPool(m_transferCmdPool);
   m_device.destroyCommandPool(m_computeCmdPool);
   m_device.destroyCommandPool(m_graphicsCmdPool);
@@ -94,6 +96,61 @@ const vk::SurfaceKHR& VulkanContext::surface() const {
   return m_surface;
 }
 
+std::pair<unsigned int, const vk::Queue&> VulkanContext::graphicsQueue() const {
+  return { (m_queueFamilyIndices >> GRAPHICS_SHIFT) & 0xFF, m_graphicsQueue };
+}
+
+std::pair<unsigned int, const vk::Queue&> VulkanContext::presentQueue() const {
+  return { (m_queueFamilyIndices >> PRESENT_SHIFT) & 0xFF, m_presentQueue };
+}
+
+std::pair<unsigned int, const vk::Queue&> VulkanContext::transferQueue() const {
+  return { (m_queueFamilyIndices >> TRANSFER_SHIFT) & 0xFF, m_transferQueue };
+}
+
+std::pair<unsigned int, const vk::Queue&> VulkanContext::computeQueue() const {
+  return { (m_queueFamilyIndices >> COMPUTE_SHIFT) & 0xFF, m_computeQueue };
+}
+
+std::vector<vk::CommandBuffer> VulkanContext::graphicsCmds(unsigned int count) const {
+  return m_device.allocateCommandBuffers(vk::CommandBufferAllocateInfo{
+    .commandPool        = m_graphicsCmdPool,
+    .level              = vk::CommandBufferLevel::ePrimary,
+    .commandBufferCount = count
+  });
+}
+
+std::vector<vk::CommandBuffer> VulkanContext::transferCmds(unsigned int count) const {
+  return m_device.allocateCommandBuffers(vk::CommandBufferAllocateInfo{
+    .commandPool        = m_transferCmdPool,
+    .level              = vk::CommandBufferLevel::ePrimary,
+    .commandBufferCount = count
+  });
+}
+
+std::vector<vk::CommandBuffer> VulkanContext::computeCmds(unsigned int count) const {
+  return m_device.allocateCommandBuffers(vk::CommandBufferAllocateInfo{
+    .commandPool        = m_computeCmdPool,
+    .level              = vk::CommandBufferLevel::ePrimary,
+    .commandBufferCount = count
+  });
+}
+
+void VulkanContext::destroyGraphicsCmds(std::vector<vk::CommandBuffer>& cmds) const {
+  m_device.freeCommandBuffers(m_graphicsCmdPool, cmds);
+  cmds.clear();
+}
+
+void VulkanContext::destroyTransferCmds(std::vector<vk::CommandBuffer>& cmds) const {
+  m_device.freeCommandBuffers(m_transferCmdPool, cmds);
+  cmds.clear();
+}
+
+void VulkanContext::destroyComputeCmds(std::vector<vk::CommandBuffer>& cmds) const {
+  m_device.freeCommandBuffers(m_computeCmdPool, cmds);
+  cmds.clear();
+}
+
 bool VulkanContext::supportsTesselation() const {
   return m_gpu.getFeatures().tessellationShader;
 }
@@ -104,119 +161,6 @@ bool VulkanContext::supportsNonSolidMesh() const {
 
 bool VulkanContext::supportsAnisotropy() const {
   return m_gpu.getFeatures().samplerAnisotropy;
-}
-
-vk::CommandBuffer VulkanContext::beginTransfer() const {
-  vk::CommandBuffer cmdBuf = m_device.allocateCommandBuffers(vk::CommandBufferAllocateInfo{
-    .commandPool        = m_transferCmdPool,
-    .level              = vk::CommandBufferLevel::ePrimary,
-    .commandBufferCount = 1
-  })[0];
-
-  cmdBuf.begin(vk::CommandBufferBeginInfo{});
-  return cmdBuf;
-}
-
-void VulkanContext::endTransfer(const vk::CommandBuffer& cmdBuf) const {
-  cmdBuf.end();
-
-  vk::SubmitInfo submitInfo{
-    .commandBufferCount = 1,
-    .pCommandBuffers    = &cmdBuf
-  };
-
-  vk::Fence fence = m_device.createFence({});
-  m_transferQueue.submit(submitInfo, fence);
-  vk::Result res = m_device.waitForFences(fence, true, 1000000000);
-
-  m_device.freeCommandBuffers(m_transferCmdPool, cmdBuf);
-  m_device.destroyFence(fence);
-
-  if (res != vk::Result::eSuccess)
-    Log::runtime_error("hung waiting for transfer");
-}
-
-vk::CommandBuffer VulkanContext::beginDispatch() const {
-  vk::CommandBuffer cmdBuf = m_device.allocateCommandBuffers(vk::CommandBufferAllocateInfo{
-    .commandPool        = m_computeCmdPool,
-    .level              = vk::CommandBufferLevel::ePrimary,
-    .commandBufferCount = 1
-  })[0];
-
-  cmdBuf.begin(vk::CommandBufferBeginInfo{});
-  return cmdBuf;
-}
-
-void VulkanContext::endDispatch(const vk::CommandBuffer& cmdBuf) const {
-  cmdBuf.end();
-
-  vk::SubmitInfo submitInfo{
-    .commandBufferCount = 1,
-    .pCommandBuffers    = &cmdBuf
-  };
-
-  vk::Fence fence = m_device.createFence({});
-  m_computeQueue.submit(submitInfo, fence);
-  vk::Result res = m_device.waitForFences(fence, true, 1000000000);
-
-  m_device.freeCommandBuffers(m_computeCmdPool, cmdBuf);
-  m_device.destroyFence(fence);
-
-  if (res != vk::Result::eSuccess)
-    Log::runtime_error("hung waiting for compute dispatch");
-}
-
-std::vector<vk::CommandBuffer> VulkanContext::createRenderBuffers(unsigned int count) const {
-  return m_device.allocateCommandBuffers(vk::CommandBufferAllocateInfo{
-    .commandPool        = m_graphicsCmdPool,
-    .level              = vk::CommandBufferLevel::ePrimary,
-    .commandBufferCount = count
-  });
-}
-
-std::vector<vk::Fence> VulkanContext::createFlightFences(unsigned int count) const {
-  std::vector<vk::Fence> fences;
-  for (unsigned int i = 0; i < count; ++i)
-    fences.emplace_back(m_device.createFence(vk::FenceCreateInfo{ .flags = vk::FenceCreateFlagBits::eSignaled }));
-  return fences;
-}
-
-std::vector<vk::Semaphore> VulkanContext::createRenderSemaphores(unsigned int count) const {
-  std::vector<vk::Semaphore> semaphores;
-  for (unsigned int i = 0; i < count; ++i)
-    semaphores.emplace_back(m_device.createSemaphore(vk::SemaphoreCreateInfo{}));
-  return semaphores;
-}
-
-void VulkanContext::destroyRenderBuffers(std::vector<vk::CommandBuffer>& bufs) const {
-  m_device.freeCommandBuffers(m_graphicsCmdPool, bufs);
-  bufs.clear();
-}
-
-void VulkanContext::submitRender(const RenderInfo& info) const {
-  vk::PipelineStageFlags waitStage = vk::PipelineStageFlagBits::eColorAttachmentOutput;
-  m_graphicsQueue.submit(vk::SubmitInfo{
-    .waitSemaphoreCount   = 1,
-    .pWaitSemaphores      = &info.imageSemaphore,
-    .pWaitDstStageMask    = &waitStage,
-    .commandBufferCount   = 1,
-    .pCommandBuffers      = &info.cmdBuf,
-    .signalSemaphoreCount = 1,
-    .pSignalSemaphores    = &info.renderSemaphore
-  }, info.fence);
-}
-
-void VulkanContext::presentRender(const PresentInfo& info) const {
-  vk::PresentInfoKHR presentInfo{
-    .waitSemaphoreCount = 1,
-    .pWaitSemaphores    = &info.renderSemaphore,
-    .swapchainCount     = 1,
-    .pSwapchains        = &info.swapchain,
-    .pImageIndices      = &info.imgIndex
-  };
-
-  if (m_presentQueue.presentKHR(presentInfo) != vk::Result::eSuccess)
-    Log::runtime_error("failed to present image");
 }
 
 void VulkanContext::createSurface(GLFWwindow * window) {
@@ -314,7 +258,7 @@ void VulkanContext::createCommandPools() {
   });
 
   m_computeCmdPool = m_device.createCommandPool(vk::CommandPoolCreateInfo{
-    .flags            = vk::CommandPoolCreateFlagBits::eTransient,
+    .flags            = vk::CommandPoolCreateFlagBits::eResetCommandBuffer,
     .queueFamilyIndex = (m_queueFamilyIndices >> COMPUTE_SHIFT) & 0xFF
   });
 

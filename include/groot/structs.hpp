@@ -59,10 +59,9 @@ struct SamplerSettings {
 struct ComputeCommand {
   RID pipeline = RID();
   RID descriptor_set = RID();
-  std::vector<uint8_t> push_constants;
+  std::vector<unsigned char> push_constants;
   std::tuple<unsigned int, unsigned int, unsigned int> work_groups = { 1, 1, 1 };
   bool barrier = false;
-  bool post_process = false;
 };
 
 } // namespace groot

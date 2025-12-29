@@ -22,4 +22,8 @@ void Log::out_of_range(const std::string& message) {
   throw std::out_of_range(std::format("\033[31m\n[Groot Engine] {}\n\033[0m", message));
 }
 
+void Log::bad_cast() {
+  throw std::bad_cast();
+}
+
 } // namespace groot

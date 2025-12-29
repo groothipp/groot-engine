@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 4.2)
 option(GROOT_MAKE_TESTS "Compiles Groot Engine tests" OFF)
 
 set(GROOT_VERSION_MAJOR 2)
-set(GROOT_VERSION_MINOR 101)
+set(GROOT_VERSION_MINOR 124)
 set(GROOT_VERSION_PATCH 23)
 
 project(GrootEngine

@@ -8,9 +8,9 @@
 #include "src/include/structs.hpp"
 #include "src/include/tiny_obj_loader.h"
 #include "src/include/vulkan_context.hpp"
-#include "vulkan/vulkan.hpp"
 
 #include <GLFW/glfw3.h>
+#include <imgui.h>
 
 #include <chrono>
 
@@ -22,6 +22,7 @@ Engine::Engine(const Settings& settings) : m_settings(settings) {
 
   glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
   glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+  glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);
 
   auto [width, height] = m_settings.window_size;
   m_window = glfwCreateWindow(width, height, m_settings.window_title.c_str(), nullptr, nullptr);
@@ -51,7 +52,8 @@ Engine::Engine(const Settings& settings) : m_settings(settings) {
   glfwSetKeyCallback(m_window, InputManager::keyCallback);
   glfwSetCursorPosCallback(m_window, InputManager::cursorCallback);
   glfwSetMouseButtonCallback(m_window, InputManager::mouseCallback);
-  glfwSetInputMode(m_window, GLFW_CURSOR, GLFW_CURSOR_CAPTURED);
+
+  glfwSetInputMode(m_window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 }
 
 Engine::~Engine() {
@@ -177,13 +179,15 @@ std::tuple<vec3, vec3, vec3> Engine::camera_basis() const {
 }
 
 void Engine::capture_cursor() const {
- if (glfwGetInputMode(m_window, GLFW_CURSOR) != GLFW_CURSOR_CAPTURED)
-   glfwSetInputMode(m_window, GLFW_CURSOR, GLFW_CURSOR_CAPTURED);
+  ImGuiIO& io = ImGui::GetIO();
+  io.MouseDrawCursor = false;
+  io.ConfigFlags |= ImGuiConfigFlags_NoMouse;
 }
 
 void Engine::release_cursor() const {
-  if (glfwGetInputMode(m_window, GLFW_CURSOR) != GLFW_CURSOR_NORMAL)
-    glfwSetInputMode(m_window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+  ImGuiIO& io = ImGui::GetIO();
+  io.MouseDrawCursor = true;
+  io.ConfigFlags &= ~(ImGuiConfigFlags_NoMouse);
 }
 
 RID Engine::render_target() {
@@ -215,39 +219,40 @@ void Engine::rotate_camera(float pitch, float yaw) {
   m_cameraTarget = m_cameraEye + dist * dir;
 }
 
-void Engine::run(std::function<void(double)> code) {
+void Engine::run(std::function<void(double)> pre_draw, std::function<void(double)> post_draw) {
   while (!glfwWindowShouldClose(m_window)) {
     updateTimes();
     m_inputManager->reset();
     glfwPollEvents();
 
-    unsigned int imgIndex = m_renderer->prepFrame(m_context->device());
-    auto [drawImage, drawView] = m_renderer->drawTarget(imgIndex);
-    auto [renderImage, renderView] = m_renderer->renderTarget(imgIndex);
+    m_renderer->prepFrame(m_context, m_resources);
 
+    m_renderer->beginDispatch(m_context, m_storageTextures);
+    pre_draw(m_frameTime);
+    m_renderer->endDispatch(m_context, m_storageTextures);
+
+    unsigned int imgIndex = m_renderer->draw(m_context, m_storageTextures, m_resources, m_scene);
+
+    auto [drawImage, drawView] = m_renderer->drawTarget(imgIndex);
     m_drawOutput = new ImageHandle;
     m_drawOutput->image = drawImage;
     m_drawOutput->view = drawView;
 
+    auto [renderImage, renderView] = m_renderer->renderTarget(imgIndex);
     m_renderTarget = new ImageHandle;
     m_renderTarget->image = renderImage;
     m_renderTarget->view = renderView;
 
-    transitionImagesCompute();
-    code(m_frameTime);
+    m_renderer->beginPostProcess(m_context, imgIndex);
+    post_draw(m_frameTime);
+    m_renderer->endPostProcess(m_context, imgIndex);
 
-    transitionImagesGraphics(m_renderer->renderBuffer());
-    m_renderer->render(m_context, m_scene, m_resources, imgIndex);
-    blit();
-
-    postProcess();
-
+    m_renderer->drawUI(m_context, imgIndex, m_guis);
     m_renderer->submit(m_context, imgIndex);
 
     delete m_drawOutput;
     delete m_renderTarget;
   }
-
   m_context->device().waitIdle();
 }
 
@@ -379,7 +384,9 @@ RID Engine::create_storage_image(unsigned int width, unsigned int height, ImageT
 
   vk::Image image = m_allocator->allocateImage(imageCreateInfo);
 
-  vk::CommandBuffer cmdBuf = m_context->beginTransfer();
+  std::vector<vk::CommandBuffer> cmds = m_context->transferCmds(1);
+  vk::CommandBuffer& cmd = cmds[0];
+  cmd.begin(vk::CommandBufferBeginInfo{ .flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit });
 
   vk::ImageMemoryBarrier shaderBarrier{
     .oldLayout        = vk::ImageLayout::eUndefined,
@@ -392,7 +399,7 @@ RID Engine::create_storage_image(unsigned int width, unsigned int height, ImageT
     }
   };
 
-  cmdBuf.pipelineBarrier(
+  cmd.pipelineBarrier(
     vk::PipelineStageFlagBits::eTopOfPipe,
     vk::PipelineStageFlagBits::eTopOfPipe,
     vk::DependencyFlags(),
@@ -401,7 +408,15 @@ RID Engine::create_storage_image(unsigned int width, unsigned int height, ImageT
     shaderBarrier
   );
 
-  m_context->endTransfer(cmdBuf);
+  cmd.end();
+
+  vk::Fence fence = m_context->device().createFence({});
+
+  auto [index, queue] = m_context->transferQueue();
+  queue.submit(vk::SubmitInfo{
+    .commandBufferCount = 1,
+    .pCommandBuffers    = &cmd,
+  }, fence);
 
   vk::ImageViewCreateInfo viewCreateInfo{
     .image    = image,
@@ -428,6 +443,12 @@ RID Engine::create_storage_image(unsigned int width, unsigned int height, ImageT
 
   RID rid(m_nextRID++, ResourceType::StorageImage);
   m_resources[rid] = reinterpret_cast<unsigned long>(handle);
+
+  if (m_context->device().waitForFences(fence, true, 1000000000) != vk::Result::eSuccess)
+    Log::runtime_error("Hung waiting for storage image transition");
+
+  m_context->device().destroyFence(fence);
+  m_context->destroyTransferCmds(cmds);
 
   return rid;
 }
@@ -474,7 +495,9 @@ RID Engine::create_texture(const std::string& path, const RID& sampler) {
     .usage        = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferDst
   });
 
-  vk::CommandBuffer cmdBuf = m_context->beginTransfer();
+  std::vector<vk::CommandBuffer> cmds = m_context->transferCmds(1);
+  vk::CommandBuffer& cmd = cmds[0];
+  cmd.begin(vk::CommandBufferBeginInfo{ .flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit });
 
   vk::ImageMemoryBarrier copyBarrier{
     .dstAccessMask    = vk::AccessFlagBits::eTransferWrite,
@@ -487,7 +510,7 @@ RID Engine::create_texture(const std::string& path, const RID& sampler) {
     }
   };
 
-  cmdBuf.pipelineBarrier(
+  cmd.pipelineBarrier(
     vk::PipelineStageFlagBits::eTopOfPipe,
     vk::PipelineStageFlagBits::eTransfer,
     vk::DependencyFlags(),
@@ -496,7 +519,7 @@ RID Engine::create_texture(const std::string& path, const RID& sampler) {
     copyBarrier
   );
 
-  cmdBuf.copyBufferToImage(buffer, image, vk::ImageLayout::eTransferDstOptimal, vk::BufferImageCopy{
+  cmd.copyBufferToImage(buffer, image, vk::ImageLayout::eTransferDstOptimal, vk::BufferImageCopy{
     .imageSubresource = {
       .aspectMask = vk::ImageAspectFlagBits::eColor,
       .layerCount = 1
@@ -517,7 +540,7 @@ RID Engine::create_texture(const std::string& path, const RID& sampler) {
     }
   };
 
-  cmdBuf.pipelineBarrier(
+  cmd.pipelineBarrier(
     vk::PipelineStageFlagBits::eTransfer,
     vk::PipelineStageFlagBits::eFragmentShader,
     vk::DependencyFlags(),
@@ -526,9 +549,15 @@ RID Engine::create_texture(const std::string& path, const RID& sampler) {
     shaderBarrier
   );
 
-  m_context->endTransfer(cmdBuf);
+  cmd.end();
 
-  m_allocator->destroyBuffer(buffer);
+  vk::Fence fence = m_context->device().createFence({});
+
+  auto [index, queue] = m_context->transferQueue();
+  queue.submit(vk::SubmitInfo{
+    .commandBufferCount = 1,
+    .pCommandBuffers    = &cmd
+  }, fence);
 
   vk::ImageView view = m_context->device().createImageView(vk::ImageViewCreateInfo{
     .image = image,
@@ -555,6 +584,13 @@ RID Engine::create_texture(const std::string& path, const RID& sampler) {
   RID rid(m_nextRID++, ResourceType::Texture);
   m_resources[rid] = reinterpret_cast<unsigned long>(handle);
   m_busySamplers.emplace(rid);
+
+  if (m_context->device().waitForFences(fence, true, 1000000000) != vk::Result::eSuccess)
+    Log::runtime_error("Hung waiting for texture transition");
+
+  m_allocator->destroyBuffer(buffer);
+  m_context->device().destroyFence(fence);
+  m_context->destroyTransferCmds(cmds);
 
   return rid;
 }
@@ -588,10 +624,11 @@ RID Engine::create_storage_texture(unsigned int width, unsigned int height, cons
 
   vk::Image image = m_allocator->allocateImage(imageCreateInfo);
 
-  vk::CommandBuffer cmdBuf = m_context->beginTransfer();
+  std::vector<vk::CommandBuffer> cmds = m_context->transferCmds(1);
+  vk::CommandBuffer& cmd = cmds[0];
+  cmd.begin(vk::CommandBufferBeginInfo{ .flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit });
 
   vk::ImageMemoryBarrier shaderBarrier{
-    .oldLayout        = vk::ImageLayout::eUndefined,
     .newLayout        = vk::ImageLayout::eShaderReadOnlyOptimal,
     .image            = image,
     .subresourceRange = {
@@ -601,7 +638,7 @@ RID Engine::create_storage_texture(unsigned int width, unsigned int height, cons
     }
   };
 
-  cmdBuf.pipelineBarrier(
+  cmd.pipelineBarrier(
     vk::PipelineStageFlagBits::eTopOfPipe,
     vk::PipelineStageFlagBits::eTopOfPipe,
     vk::DependencyFlags(),
@@ -610,7 +647,15 @@ RID Engine::create_storage_texture(unsigned int width, unsigned int height, cons
     shaderBarrier
   );
 
-  m_context->endTransfer(cmdBuf);
+  cmd.end();
+
+  vk::Fence fence = m_context->device().createFence({});
+
+  auto [index, queue] = m_context->transferQueue();
+  queue.submit(vk::SubmitInfo{
+    .commandBufferCount = 1,
+    .pCommandBuffers    = &cmd
+  }, fence);
 
   vk::ImageViewCreateInfo viewCreateInfo{
     .image = image,
@@ -640,6 +685,12 @@ RID Engine::create_storage_texture(unsigned int width, unsigned int height, cons
   m_resources[rid] = reinterpret_cast<unsigned long>(handle);
   m_busySamplers.emplace(sampler);
   m_storageTextures.emplace(reinterpret_cast<unsigned long>(static_cast<VkImage>(image)));
+
+  if (m_context->device().waitForFences(fence, true, 1000000000) != vk::Result::eSuccess)
+    Log::runtime_error("Hung waiting for storage texture transition");
+
+  m_context->device().destroyFence(fence);
+  m_context->destroyTransferCmds(cmds);
 
   return rid;
 }
@@ -1464,20 +1515,27 @@ RID Engine::load_mesh(const std::string& path) {
     .usage  = vk::BufferUsageFlagBits::eIndexBuffer | vk::BufferUsageFlagBits::eTransferDst
   }, VMA_MEMORY_USAGE_GPU_ONLY, 0);
 
-  vk::CommandBuffer cmdBuf = m_context->beginTransfer();
+  std::vector<vk::CommandBuffer> cmds = m_context->transferCmds(1);
+  vk::CommandBuffer& cmd = cmds[0];
+  cmd.begin(vk::CommandBufferBeginInfo{ .flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit });
 
-  cmdBuf.copyBuffer(vertexStaging, vertexBuffer, vk::BufferCopy{
+  cmd.copyBuffer(vertexStaging, vertexBuffer, vk::BufferCopy{
     .size = sizeof(Vertex) * vertices.size()
   });
 
-  cmdBuf.copyBuffer(indexStaging, indexBuffer, vk::BufferCopy{
+  cmd.copyBuffer(indexStaging, indexBuffer, vk::BufferCopy{
     .size = sizeof(unsigned int) * indices.size()
   });
 
-  m_context->endTransfer(cmdBuf);
+  cmd.end();
 
-  m_allocator->destroyBuffer(vertexStaging);
-  m_allocator->destroyBuffer(indexStaging);
+  vk::Fence fence = m_context->device().createFence({});
+
+  auto [index, queue] = m_context->transferQueue();
+  queue.submit(vk::SubmitInfo{
+    .commandBufferCount = 1,
+    .pCommandBuffers    = &cmd
+  }, fence);
 
   MeshHandle * mesh = new MeshHandle;
 
@@ -1487,6 +1545,14 @@ RID Engine::load_mesh(const std::string& path) {
 
   RID rid(m_nextRID++, ResourceType::Mesh);
   m_resources[rid] = reinterpret_cast<unsigned long>(mesh);
+
+  if (m_context->device().waitForFences(fence, true, 1000000000) != vk::Result::eSuccess)
+    Log::runtime_error("Hung waiting for vertex and index buffer transfer");
+
+  m_allocator->destroyBuffer(vertexStaging);
+  m_allocator->destroyBuffer(indexStaging);
+  m_context->device().destroyFence(fence);
+  m_context->destroyTransferCmds(cmds);
 
   return rid;
 }
@@ -1513,78 +1579,28 @@ void Engine::destroy_mesh(RID& rid) {
   rid.invalidate();
 }
 
-void Engine::compute_command(const ComputeCommand& cmd) {
-  if (!cmd.pipeline.is_valid()) {
-    Log::warn("tried to submit compute command with invalid pipeline");
-    return;
-  }
-
-  if (cmd.pipeline.m_type != ResourceType::Pipeline) {
-    Log::warn("tried to submit compute command with non-pipeline RID");
-    return;
-  }
-
+void Engine::dispatch(const ComputeCommand& cmd) {
   if (!cmd.descriptor_set.is_valid()) {
-    Log::warn("tried to submit compute command with invalid descriptor set");
+    Log::warn("Tried to dispatch compute command with invalid descriptor set");
     return;
   }
 
   if (cmd.descriptor_set.m_type != ResourceType::DescriptorSet) {
-    Log::warn("tried to submit compute command with non-descriptor-set RID");
+    Log::warn("Tried to dispatch compute command with non-descriptor-set RID");
     return;
   }
 
-  cmd.post_process ? m_postProcessCmds.emplace(cmd) : m_computeCmds.emplace(cmd);
-}
-
-void Engine::dispatch() {
-  if (m_computeCmds.empty()) {
-    Log::warn("tried to dispatch 0 compute commands");
+  if (!cmd.pipeline.is_valid()) {
+    Log::warn("Tried to dispatch compute command with invalid pipeline");
     return;
   }
 
-  vk::CommandBuffer cmdBuf = nullptr;
-
-  while (!m_computeCmds.empty()) {
-    ComputeCommand cmd = m_computeCmds.front();
-    m_computeCmds.pop();
-
-    if (cmdBuf == nullptr)
-      cmdBuf = m_context->beginDispatch();
-    else if (cmd.barrier) {
-      m_context->endDispatch(cmdBuf);
-      cmdBuf = m_context->beginDispatch();
-    }
-
-    PipelineHandle * pipeline = reinterpret_cast<PipelineHandle *>(m_resources.at(cmd.pipeline));
-    DescriptorSetHandle * set = reinterpret_cast<DescriptorSetHandle *>(m_resources.at(cmd.descriptor_set));
-
-    cmdBuf.bindPipeline(vk::PipelineBindPoint::eCompute, pipeline->pipeline);
-
-    cmdBuf.bindDescriptorSets(
-      vk::PipelineBindPoint::eCompute,
-      pipeline->layout,
-      0,
-      1,
-      &set->set,
-      0,
-      nullptr
-    );
-
-    if (!cmd.push_constants.empty()) {
-      cmdBuf.pushConstants<uint8_t>(
-        pipeline->layout,
-        vk::ShaderStageFlagBits::eCompute,
-        0,
-        cmd.push_constants
-      );
-    }
-
-    auto [x, y, z] = cmd.work_groups;
-    cmdBuf.dispatch(x, y, z);
+  if (cmd.pipeline.m_type != ResourceType::Pipeline) {
+    Log::warn("Tried to dispatch compute command with non-pipeline RID");
+    return;
   }
 
-  m_context->endDispatch(cmdBuf);
+  m_renderer->dispatch(m_context, cmd, m_resources);
 }
 
 void Engine::add_to_scene(Object& object) {
@@ -1605,6 +1621,17 @@ void Engine::remove_from_scene(Object& object) {
 
   m_scene.erase(object);
   object.m_id.invalidate();
+}
+
+void Engine::add_gui(const std::string& label, GUI&& gui) {
+  if (m_guis.contains(label))
+    Log::runtime_error(std::format("Duplicate GUIs with label \"{}\"", label));
+
+  m_guis.emplace(label, std::move(gui));
+}
+
+void Engine::toggle_gui(const std::string& gui) {
+  m_guis.at(gui).toggle();
 }
 
 void Engine::updateTimes() {
@@ -1661,250 +1688,6 @@ void Engine::writeBufferRaw(const RID& rid, std::size_t size, const void * data)
   void * map = m_allocator->mapBuffer(buffer);
   std::memcpy(map, data, size);
   m_allocator->unmapBuffer(buffer);
-}
-
-void Engine::transitionImagesCompute() const {
-  if (m_storageTextures.empty()) return;
-
-  vk::CommandBuffer cmdBuf = m_context->beginDispatch();
-
-  for (const auto& image : m_storageTextures) {
-    vk::ImageMemoryBarrier barrier {
-      .srcAccessMask    = vk::AccessFlagBits::eShaderRead,
-      .dstAccessMask    = vk::AccessFlagBits::eShaderRead | vk::AccessFlagBits::eShaderWrite,
-      .oldLayout        = vk::ImageLayout::eShaderReadOnlyOptimal,
-      .newLayout        = vk::ImageLayout::eGeneral,
-      .image            = reinterpret_cast<VkImage>(image),
-      .subresourceRange = {
-        .aspectMask = vk::ImageAspectFlagBits::eColor,
-        .levelCount = 1,
-        .layerCount = 1
-      }
-    };
-
-    cmdBuf.pipelineBarrier(
-      vk::PipelineStageFlagBits::eFragmentShader,
-      vk::PipelineStageFlagBits::eComputeShader,
-      vk::DependencyFlags(),
-      nullptr,
-      nullptr,
-      barrier
-    );
-  }
-
-  m_context->endDispatch(cmdBuf);
-}
-
-void Engine::transitionImagesGraphics(const vk::CommandBuffer& cmdBuf) const {
-  if (m_storageTextures.empty()) return;
-
-  for (const auto& image : m_storageTextures) {
-    vk::ImageMemoryBarrier barrier {
-      .srcAccessMask    = vk::AccessFlagBits::eShaderWrite,
-      .dstAccessMask    = vk::AccessFlagBits::eShaderRead,
-      .oldLayout        = vk::ImageLayout::eGeneral,
-      .newLayout        = vk::ImageLayout::eShaderReadOnlyOptimal,
-      .image            = reinterpret_cast<VkImage>(image),
-      .subresourceRange = {
-        .aspectMask = vk::ImageAspectFlagBits::eColor,
-        .levelCount = 1,
-        .layerCount = 1
-      }
-    };
-
-    cmdBuf.pipelineBarrier(
-      vk::PipelineStageFlagBits::eComputeShader,
-      vk::PipelineStageFlagBits::eFragmentShader,
-      vk::DependencyFlags(),
-      nullptr,
-      nullptr,
-      barrier
-    );
-  }
-}
-
-void Engine::postProcess() {
-  if (m_postProcessCmds.empty()) {
-    vk::CommandBuffer cmdBuf = m_context->beginDispatch();
-
-    vk::ImageMemoryBarrier barrier{
-      .srcAccessMask  = vk::AccessFlagBits::eShaderWrite,
-      .oldLayout      = vk::ImageLayout::eGeneral,
-      .newLayout      = vk::ImageLayout::ePresentSrcKHR,
-      .image          = m_renderTarget->image,
-      .subresourceRange = {
-        .aspectMask = vk::ImageAspectFlagBits::eColor,
-        .levelCount = 1,
-        .layerCount = 1
-      }
-    };
-
-    cmdBuf.pipelineBarrier(
-      vk::PipelineStageFlagBits::eComputeShader,
-      vk::PipelineStageFlagBits::eBottomOfPipe,
-      vk::DependencyFlags(),
-      nullptr,
-      nullptr,
-      barrier
-    );
-
-    m_context->endDispatch(cmdBuf);
-    return;
-  }
-
-  vk::CommandBuffer cmdBuf = nullptr;
-  std::vector<RID> rids;
-  while (!m_postProcessCmds.empty()) {
-    ComputeCommand cmd = m_postProcessCmds.front();
-    m_postProcessCmds.pop();
-
-    if (cmdBuf == nullptr)
-      cmdBuf = m_context->beginDispatch();
-    else if (cmd.barrier) {
-      m_context->endDispatch(cmdBuf);
-      cmdBuf = m_context->beginDispatch();
-    }
-
-    PipelineHandle * pipeline = reinterpret_cast<PipelineHandle *>(m_resources.at(cmd.pipeline));
-    DescriptorSetHandle * set = reinterpret_cast<DescriptorSetHandle *>(m_resources.at(cmd.descriptor_set));
-
-    cmdBuf.bindPipeline(vk::PipelineBindPoint::eCompute, pipeline->pipeline);
-
-    cmdBuf.bindDescriptorSets(
-      vk::PipelineBindPoint::eCompute,
-      pipeline->layout,
-      0,
-      1,
-      &set->set,
-      0,
-      nullptr
-    );
-
-    if (!cmd.push_constants.empty()) {
-      cmdBuf.pushConstants<uint8_t>(
-        pipeline->layout,
-        vk::ShaderStageFlagBits::eCompute,
-        0,
-        cmd.push_constants
-      );
-    }
-
-    auto [x, y, z] = cmd.work_groups;
-    cmdBuf.dispatch(x, y, z);
-
-    rids.emplace_back(cmd.pipeline);
-    rids.emplace_back(cmd.descriptor_set);
-  }
-
-  vk::ImageMemoryBarrier barrier = vk::ImageMemoryBarrier{
-    .srcAccessMask  = vk::AccessFlagBits::eShaderWrite,
-    .oldLayout      = vk::ImageLayout::eGeneral,
-    .newLayout      = vk::ImageLayout::ePresentSrcKHR,
-    .image          = m_renderTarget->image,
-    .subresourceRange = {
-      .aspectMask = vk::ImageAspectFlagBits::eColor,
-      .levelCount = 1,
-      .layerCount = 1
-    }
-  };
-
-  cmdBuf.pipelineBarrier(
-    vk::PipelineStageFlagBits::eComputeShader,
-    vk::PipelineStageFlagBits::eBottomOfPipe,
-    vk::DependencyFlags(),
-    nullptr,
-    nullptr,
-    barrier
-  );
-
-  m_context->endDispatch(cmdBuf);
-
-  for (auto& rid : rids) {
-    switch (rid.m_type) {
-      case DescriptorSet:
-        destroy_descriptor_set(rid);
-        break;
-      case Pipeline:
-        destroy_pipeline(rid);
-      default: break;
-    }
-  }
-}
-
-void Engine::blit() {
-  vk::CommandBuffer cmd = m_context->beginTransfer();
-
-  vk::ImageMemoryBarrier drawBarrier{
-    .dstAccessMask  = vk::AccessFlagBits::eTransferWrite,
-    .oldLayout      = vk::ImageLayout::eColorAttachmentOptimal,
-    .newLayout      = vk::ImageLayout::eTransferSrcOptimal,
-    .image          = m_drawOutput->image,
-    .subresourceRange = {
-      .aspectMask = vk::ImageAspectFlagBits::eColor,
-      .levelCount = 1,
-      .layerCount = 1
-    }
-  };
-
-  vk::ImageMemoryBarrier renderBarrier{
-    .dstAccessMask  = vk::AccessFlagBits::eTransferRead,
-    .oldLayout      = vk::ImageLayout::ePresentSrcKHR,
-    .newLayout      = vk::ImageLayout::eTransferDstOptimal,
-    .image          = m_renderTarget->image,
-    .subresourceRange = {
-      .aspectMask = vk::ImageAspectFlagBits::eColor,
-      .levelCount = 1,
-      .layerCount = 1
-    }
-  };
-
-  cmd.pipelineBarrier(
-    vk::PipelineStageFlagBits::eColorAttachmentOutput,
-    vk::PipelineStageFlagBits::eTransfer,
-    vk::DependencyFlags(),
-    nullptr,
-    nullptr,
-    { drawBarrier, renderBarrier }
-  );
-
-  auto [width, height] = m_renderer->extent();
-
-  cmd.copyImage(
-    m_drawOutput->image, vk::ImageLayout::eTransferSrcOptimal,
-    m_renderTarget->image, vk::ImageLayout::eTransferDstOptimal,
-    vk::ImageCopy{
-      .srcSubresource = {
-        .aspectMask = vk::ImageAspectFlagBits::eColor,
-        .layerCount = 1,
-      },
-      .dstSubresource = {
-        .aspectMask = vk::ImageAspectFlagBits::eColor,
-        .layerCount = 1
-      },
-      .extent = { width, height, 1 }
-    }
-  );
-
-  drawBarrier.srcAccessMask = vk::AccessFlagBits::eTransferRead;
-  drawBarrier.dstAccessMask = vk::AccessFlagBits::eShaderRead;
-  drawBarrier.oldLayout = vk::ImageLayout::eTransferSrcOptimal;
-  drawBarrier.newLayout = vk::ImageLayout::eGeneral;
-
-  renderBarrier.srcAccessMask = vk::AccessFlagBits::eTransferWrite;
-  renderBarrier.dstAccessMask = vk::AccessFlagBits::eShaderWrite;
-  renderBarrier.oldLayout = vk::ImageLayout::eTransferDstOptimal;
-  renderBarrier.newLayout = vk::ImageLayout::eGeneral;
-
-  cmd.pipelineBarrier(
-    vk::PipelineStageFlagBits::eTransfer,
-    vk::PipelineStageFlagBits::eComputeShader,
-    vk::DependencyFlags(),
-    nullptr,
-    nullptr,
-    { drawBarrier, renderBarrier }
-  );
-
-  m_context->endTransfer(cmd);
 }
 
 } // namespace groot

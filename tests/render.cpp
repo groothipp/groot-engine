@@ -130,8 +130,16 @@ TEST_CASE( "render", "[render]" ) {
   vec2 cursorPos;
   double inputTimer = 0.0;
 
+  engine.add_gui("Test",
+    GUI::Builder()
+      .text("Hello world")
+      .build()
+  );
+
+  engine.capture_cursor();
+
   engine.run([
-    &engine, &cube_buffer, &transform_buffer, &transform, &inputTimer, &post_comp, &width, &height,
+    &engine, &cube_buffer, &transform_buffer, &transform, &inputTimer, &width, &height,
     &velocity, &sensitivity, &lastCursorPos, &cursorPos, &plane_transform_buffer, &plane_buffer
   ](double dt) {
     inputTimer += dt;
@@ -181,15 +189,15 @@ TEST_CASE( "render", "[render]" ) {
 
     plane_transform_buffer.view = engine.camera_view();
     engine.write_buffer(plane_buffer, plane_transform_buffer);
-
+  },
+  [&engine, &width, &height, &post_comp](double){
     RID post_set = engine.create_descriptor_set({ engine.render_target() });
     RID post_pipeline = engine.create_compute_pipeline(post_comp, post_set);
 
-    engine.compute_command(ComputeCommand{
+    engine.dispatch(ComputeCommand{
       .pipeline       = post_pipeline,
       .descriptor_set = post_set,
       .work_groups    = { (width + 7) / 8, (height + 7) / 8, 1 },
-      .post_process   = true
     });
   });
 }

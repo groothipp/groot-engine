@@ -2,6 +2,7 @@
 
 #include "engine.hpp"
 #include "enums.hpp"
+#include "gui.hpp"
 #include "linalg.hpp"
 #include "log.hpp"
 #include "object.hpp"
