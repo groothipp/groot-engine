@@ -199,6 +199,14 @@ RID Engine::render_target() {
   return RID(0, ResourceType::RenderTarget);
 }
 
+unsigned int Engine::flight_frames() const {
+  return m_settings.flight_frames;
+}
+
+unsigned int Engine::frame_index() const {
+  return m_renderer->frameIndex();
+}
+
 void Engine::translate_camera(const vec3& delta) {
   m_cameraEye = m_cameraEye + delta;
   m_cameraTarget = m_cameraTarget + delta;

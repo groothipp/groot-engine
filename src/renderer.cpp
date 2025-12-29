@@ -29,12 +29,12 @@ Renderer::Renderer(
   m_clearColor.float32[2] = settings.background_color.z;
   m_clearColor.float32[3] = settings.background_color.w;
 
-  m_flightFrames = settings.flight_frames;
-
   vk::SurfaceCapabilitiesKHR capabilities = context->gpu().getSurfaceCapabilitiesKHR(context->surface());
-  unsigned int imageCount = capabilities.minImageCount + 1;
-  if (capabilities.maxImageCount > 0 && imageCount > capabilities.maxImageCount)
-    imageCount = capabilities.maxImageCount;
+  unsigned int imageCount = std::clamp(
+    settings.flight_frames, capabilities.minImageCount, capabilities.maxImageCount
+  );
+  m_flightFrames = imageCount;
+  settings.flight_frames = imageCount;
 
   vk::SwapchainCreateInfoKHR createInfo{
     .surface          = context->surface(),
@@ -43,14 +43,17 @@ Renderer::Renderer(
     .imageColorSpace  = m_colorFormat.colorSpace,
     .imageExtent      = m_extent,
     .imageArrayLayers = 1,
-    .imageUsage       = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eTransferDst,
+    .imageUsage       = vk::ImageUsageFlagBits::eColorAttachment  |
+                        vk::ImageUsageFlagBits::eStorage          |
+                        vk::ImageUsageFlagBits::eTransferDst,
     .presentMode      = m_presentMode
   };
 
   m_swapchain = context->device().createSwapchainKHR(createInfo);
   m_images = context->device().getSwapchainImagesKHR(m_swapchain);
 
-  vk::CommandBuffer cmd = context->transferCmds(1)[0];
+  std::vector<vk::CommandBuffer> cmds = context->transferCmds(1);
+  vk::CommandBuffer& cmd = cmds[0];
   cmd.begin(vk::CommandBufferBeginInfo{ .flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit });
 
   m_drawImages.reserve(m_images.size());
@@ -75,7 +78,9 @@ Renderer::Renderer(
       .arrayLayers  = 1,
       .samples      = vk::SampleCountFlagBits::e1,
       .tiling       = vk::ImageTiling::eOptimal,
-      .usage        = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eTransferSrc,
+      .usage        = vk::ImageUsageFlagBits::eColorAttachment  |
+                      vk::ImageUsageFlagBits::eStorage          |
+                      vk::ImageUsageFlagBits::eTransferSrc
     }));
 
     m_drawViews.emplace_back(context->device().createImageView(vk::ImageViewCreateInfo{
@@ -284,6 +289,7 @@ Renderer::Renderer(
   if (context->device().waitForFences(transferFence, true, 1000000000) != vk::Result::eSuccess)
     Log::runtime_error("Hung waiting for swapchain image transitions");
 
+  context->destroyTransferCmds(cmds);
   context->device().destroyFence(transferFence);
 }
 
@@ -301,6 +307,10 @@ std::pair<const vk::Image&, const vk::ImageView&> Renderer::renderTarget(unsigne
 
 std::pair<const vk::Image&, const vk::ImageView&> Renderer::drawTarget(unsigned int index) const {
   return { m_drawImages[index], m_drawViews[index] };
+}
+
+unsigned int Renderer::frameIndex() const {
+  return m_frameIndex;
 }
 
 void Renderer::destroy(const VulkanContext * context, Allocator * allocator) {

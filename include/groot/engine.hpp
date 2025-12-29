@@ -76,6 +76,8 @@ class alignas(64) Engine {
     std::tuple<vec3, vec3, vec3> camera_basis() const;
     void capture_cursor() const;
     void release_cursor() const;
+    unsigned int flight_frames() const;
+    unsigned int frame_index() const;
 
     RID render_target();
     void translate_camera(const vec3&);

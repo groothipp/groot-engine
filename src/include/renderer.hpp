@@ -66,6 +66,7 @@ class Renderer {
     std::pair<unsigned int, unsigned int> extent() const;
     std::pair<const vk::Image&, const vk::ImageView&> renderTarget(unsigned int) const;
     std::pair<const vk::Image&, const vk::ImageView&> drawTarget(unsigned int) const;
+    unsigned int frameIndex() const;
 
     void destroy(const VulkanContext *, Allocator *);
 
